@@ -1,4 +1,3 @@
-
 class IFC:
     def __init__(self, filename):
         this.filename = filename
@@ -18,29 +17,41 @@ class IFC:
                 this._filename = value
 
 
-    # Domain Layer
-
-    # Interoperability Layer
-
-    # Core Layer
-
-    # Resource Layer
-
 DL_SCHEMAS = {"Building Controls", "Plumbing FireProtections", "Structural Elements", "Structural Analysis", "HVAC", "Electrical", "Architecture", "Construction Management"}
 IO_SCHEMAS = {"Shared Bldg Services", "Shared Components", "Shared Building", "Shared Management", "Shared Facilities"}
 CONTROL_SCHEMAS = {"Control", "Product", "Process", "Kernel"}
 RSRC_SCHEMAS = {"DateTime", "Material", "External Reference", "Geometric Constraint", "Geometric Model", "Geometry", "Actor", "Profile", "Property", "Quantity", "Topology", "Utility", "Measure", "Presentation Appearance", "Presentation Definition", "Presentation Organization", "Representation", "Constraint", "Approval", "Structural Load", "Cost"}
 
-
-class DomainLayer:
-    def __init__(self, domain_type):
-        self.domain_type = domain_type
+class Layer:
+    def __init__(self, types, layer_type):
+        self._layer_types = types
+        self.layer_type = layer_type
 
     @property
-    def domain_type(self):
-        return self._domain_type
+    def layer_type(self):
+        return self._layer_type
 
-    @domain_type.setter
-    def domain_type(self, value):
-        if value not in DL_SCHEMAS:
+    @layer_type.setter
+    def layer_type(self, value):
+        if value not in self._layer_types:
             raise ValueError("Invalid Domain Layer Schema")
+
+# Domain Layer
+class Domain(Layer):
+    def __init__(self, domain_type):
+        super().__init__(DL_SCHEMAS, domain_type)
+
+# Interoperability Layer
+class InterOperanility(Layer):
+    def __init__(self, io_type):
+        super().__init__(IO_SCHEMAS, io_type)
+
+# Core Layer
+class Control(Layer):
+    def __init__(self, control_type):
+        super().__init__(CONTROL_SCHEMAS, control_type)
+
+# Resource Layer
+class Resource(Layer):
+    def __init__(self, resource_type):
+        super().__init__(RSRC_SCHEMAS, resource_type)
