@@ -4,7 +4,7 @@ class IFC:
 
     @property
     def filename(self):
-        return this._filename
+        return self._filename
 
     @filename.setter
     def set_filename(self, value: str):
