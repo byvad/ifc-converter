@@ -7,7 +7,7 @@ class IFC:
         return self._filename
 
     @filename.setter
-    def set_filename(self, value: str):
+    def filename(self, value: str):
         if not value:
             raise ValueError('Filename cannot be empty.')
         if value.startswith('.'):
