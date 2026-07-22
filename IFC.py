@@ -10,11 +10,9 @@ class IFC:
     def set_filename(self, value: str):
         if not value:
             raise ValueError('Filename cannot be empty.')
-        else:
-            if value.startswith('.'):
-                raise ValueError('Relative imports are disallowed.')
-            else:
-                this._filename = value
+        if value.startswith('.'):
+            raise ValueError('Filename cannot start with "." (hidden file or relative path).')
+        self._filename = value
 
 
 DL_SCHEMAS = {"Building Controls", "Plumbing FireProtections", "Structural Elements", "Structural Analysis", "HVAC", "Electrical", "Architecture", "Construction Management"}
