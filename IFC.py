@@ -1,10 +1,10 @@
 class IFC:
     def __init__(self, filename):
-        this.filename = filename
+        self.filename = filename
 
     @property
     def filename(self):
-        return self._filename
+        return this._filename
 
     @filename.setter
     def set_filename(self, value: str):
