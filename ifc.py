@@ -27,6 +27,10 @@ class IFC:
     # Resource Layer
 
 DL_SCHEMAS = {"Building Controls", "Plumbing FireProtections", "Structural Elements", "Structural Analysis", "HVAC", "Electrical", "Architecture", "Construction Management"}
+IO_SCHEMAS = {"Shared Bldg Services", "Shared Components", "Shared Building", "Shared Management", "Shared Facilities"}
+CONTROL_SCHEMAS = {"Control", "Product", "Process", "Kernel"}
+RSRC_SCHEMAS = {"DateTime", "Material", "External Reference", "Geometric Constraint", "Geometric Model", "Geometry", "Actor", "Profile", "Property", "Quantity", "Topology", "Utility", "Measure", "Presentation Appearance", "Presentation Definition", "Presentation Organization", "Representation", "Constraint", "Approval", "Structural Load", "Cost"}
+
 
 class DomainLayer:
     def __init__(self, domain_type):
