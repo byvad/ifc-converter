@@ -1,0 +1,51 @@
+# Ifc4_SampleHouse_IfcWallStandardCase.ifc -> OBJ
+# schema IFC4, unit scale 0.001 m
+# converted by layer descent: Domain -> Core -> Resource
+# up axis Y (rotated from IFC Z-up)
+
+o Basic_Wall_Wall-Partn_12P-70MStd-12P_285792_3cUkl32yn9qRSPvBJVyWXt
+# IfcWallStandardCase | layer Shared_Building
+v 1.667652 0.000000 1.101418
+v 1.667652 0.000000 -4.408582
+v 1.572652 0.000000 -4.408582
+v 1.572652 0.000000 1.101418
+v 1.667652 2.335000 1.101418
+v 1.667652 2.335000 -4.408582
+v 1.572652 2.335000 -4.408582
+v 1.572652 2.335000 1.101418
+f 2 1 4
+f 8 5 6
+f 4 3 2
+f 6 7 8
+f 1 2 6
+f 1 6 5
+f 2 3 7
+f 2 7 6
+f 3 4 8
+f 3 8 7
+f 4 1 5
+f 4 5 8
+
+o Basic_Wall_Wall-Partn_12P-70MStd-12P_285846_3cUkl32yn9qRSPvBJVyWY1
+# IfcWallStandardCase | layer Shared_Building
+v 6.120152 0.000000 -0.946082
+v 1.667652 0.000000 -0.946082
+v 1.667652 0.000000 -0.851082
+v 6.120152 0.000000 -0.851082
+v 6.120152 2.335000 -0.946082
+v 1.667652 2.335000 -0.946082
+v 1.667652 2.335000 -0.851082
+v 6.120152 2.335000 -0.851082
+f 10 9 12
+f 16 13 14
+f 12 11 10
+f 14 15 16
+f 9 10 14
+f 9 14 13
+f 10 11 15
+f 10 15 14
+f 11 12 16
+f 11 16 15
+f 12 9 13
+f 12 13 16
+
