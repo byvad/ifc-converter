@@ -107,8 +107,49 @@ ApplicationWindow {
                         SplitView.preferredWidth: 460
                         SplitView.fillHeight: true
                         
-                        // Placeholder for TreeView which requires a custom QAbstractItemModel in Qt6
-                        Rectangle { anchors.fill: parent; color: Style.paper; border.color: Style.rule }
+                        ListView {
+                            id: contentsTree
+                            objectName: "contentsTree"
+                            anchors.fill: parent
+                            clip: true
+                            model: []
+                            spacing: 2
+                            ScrollBar.vertical: ScrollBar {}
+
+                            delegate: Item {
+                                width: ListView.view.width
+                                height: 22
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: modelData.depth * 16
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - 74 - modelData.depth * 16
+                                    elide: Text.ElideRight
+                                    text: modelData.label
+                                    color: modelData.depth === 0
+                                           ? Style.layerColor(modelData.layer)
+                                           : modelData.depth === 1 ? Style.inkMuted
+                                                                   : Style.ink
+                                    font.pixelSize: modelData.depth === 0 ? 12 : 11
+                                    font.weight: modelData.depth === 0 ? Font.DemiBold
+                                                                       : Font.Normal
+                                    font.family: modelData.depth === 2
+                                                 ? "JetBrains Mono"
+                                                 : Qt.application.font.family
+                                }
+
+                                Text {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 14
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData.count
+                                    color: Style.inkMuted
+                                    font.pixelSize: 11
+                                    font.family: "JetBrains Mono"
+                                }
+                            }
+                        }
                     }
 
                     Card {
