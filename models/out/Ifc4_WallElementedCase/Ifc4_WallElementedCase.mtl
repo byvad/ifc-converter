@@ -1,0 +1,18 @@
+# materials resolved from Ifc4_WallElementedCase.ifc
+# IfcSurfaceStyleRendering -> Kd, Transparency -> d
+
+newmtl ifc_9BBB59FF
+Kd 0.607843 0.733333 0.349020
+Ka 0.000000 0.000000 0.000000
+Ks 0.000000 0.000000 0.000000
+Ns 10.0
+d 1.0000
+illum 2
+
+newmtl ifc_FFC000FF
+Kd 1.000000 0.752941 0.000000
+Ka 0.000000 0.000000 0.000000
+Ks 0.000000 0.000000 0.000000
+Ns 10.0
+d 1.0000
+illum 2

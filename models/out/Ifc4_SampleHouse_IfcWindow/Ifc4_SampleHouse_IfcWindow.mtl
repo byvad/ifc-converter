@@ -1,0 +1,18 @@
+# materials resolved from Ifc4_SampleHouse_IfcWindow.ifc
+# IfcSurfaceStyleRendering -> Kd, Transparency -> d
+
+newmtl ifc_0080C040
+Kd 0.000000 0.501961 0.752941
+Ka 0.000000 0.000000 0.000000
+Ks 0.000000 0.000000 0.000000
+Ns 10.0
+d 0.2500
+illum 4
+
+newmtl ifc_F9F9F9FF
+Kd 0.976471 0.976471 0.976471
+Ka 0.000000 0.000000 0.000000
+Ks 0.000000 0.000000 0.000000
+Ns 10.0
+d 1.0000
+illum 2
