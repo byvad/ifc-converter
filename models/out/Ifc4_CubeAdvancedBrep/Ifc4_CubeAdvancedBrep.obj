@@ -1,7 +1,0 @@
-# Ifc4_CubeAdvancedBrep.ifc -> OBJ
-# schema IFC4, unit scale 1.0 m
-# converted by layer descent: Domain -> Core -> Resource
-# up axis Y (rotated from IFC Z-up)
-
-mtllib Ifc4_CubeAdvancedBrep.mtl
-
