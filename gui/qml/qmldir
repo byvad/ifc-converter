@@ -1,0 +1,9 @@
+module IfcConverter
+
+# Design tokens as a Singleton
+singleton Style 1.0 Style.qml
+
+# Reusable UI Components
+Card 1.0 Card.qml
+LayerStep 1.0 LayerStep.qml
+DescentRail 1.0 DescentRail.qml
