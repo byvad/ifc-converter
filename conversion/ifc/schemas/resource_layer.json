@@ -1,0 +1,153 @@
+{
+  "layer": "Resource",
+  "schemas": {
+    "Geometry": [
+      "IfcCartesianPoint",
+      "IfcDirection",
+      "IfcVector",
+      "IfcAxis2Placement2D",
+      "IfcAxis2Placement3D",
+      "IfcAxis1Placement",
+      "IfcPolyline",
+      "IfcLine",
+      "IfcCircle",
+      "IfcEllipse",
+      "IfcTrimmedCurve",
+      "IfcCompositeCurve",
+      "IfcIndexedPolyCurve",
+      "IfcCartesianPointList2D",
+      "IfcCartesianPointList3D",
+      "IfcCartesianTransformationOperator3D",
+      "IfcBSplineCurve"
+    ],
+    "Geometric Model": [
+      "IfcExtrudedAreaSolid",
+      "IfcRevolvedAreaSolid",
+      "IfcSweptDiskSolid",
+      "IfcSurfaceCurveSweptAreaSolid",
+      "IfcFacetedBrep",
+      "IfcAdvancedBrep",
+      "IfcCsgSolid",
+      "IfcBooleanResult",
+      "IfcBooleanClippingResult",
+      "IfcHalfSpaceSolid",
+      "IfcPolygonalBoundedHalfSpace",
+      "IfcBlock",
+      "IfcTriangulatedFaceSet",
+      "IfcPolygonalFaceSet",
+      "IfcIndexedPolygonalFace",
+      "IfcFaceBasedSurfaceModel",
+      "IfcShellBasedSurfaceModel"
+    ],
+    "Topology": [
+      "IfcFace",
+      "IfcFaceOuterBound",
+      "IfcFaceBound",
+      "IfcPolyLoop",
+      "IfcClosedShell",
+      "IfcOpenShell",
+      "IfcConnectedFaceSet",
+      "IfcVertexPoint",
+      "IfcEdge",
+      "IfcEdgeCurve",
+      "IfcEdgeLoop"
+    ],
+    "Profile": [
+      "IfcRectangleProfileDef",
+      "IfcRoundedRectangleProfileDef",
+      "IfcCircleProfileDef",
+      "IfcCircleHollowProfileDef",
+      "IfcEllipseProfileDef",
+      "IfcArbitraryClosedProfileDef",
+      "IfcArbitraryProfileDefWithVoids",
+      "IfcArbitraryOpenProfileDef",
+      "IfcIShapeProfileDef",
+      "IfcLShapeProfileDef",
+      "IfcTShapeProfileDef",
+      "IfcUShapeProfileDef",
+      "IfcCShapeProfileDef",
+      "IfcZShapeProfileDef",
+      "IfcCompositeProfileDef",
+      "IfcDerivedProfileDef"
+    ],
+    "Representation": [
+      "IfcProductRepresentation",
+      "IfcProductDefinitionShape",
+      "IfcRepresentation",
+      "IfcShapeRepresentation",
+      "IfcTopologyRepresentation",
+      "IfcRepresentationContext",
+      "IfcGeometricRepresentationContext",
+      "IfcGeometricRepresentationSubContext",
+      "IfcRepresentationItem",
+      "IfcRepresentationMap",
+      "IfcMappedItem",
+      "IfcStyledItem",
+      "IfcShapeAspect"
+    ],
+    "Geometric Constraint": [
+      "IfcObjectPlacement",
+      "IfcLocalPlacement",
+      "IfcGridPlacement"
+    ],
+    "Measure": [
+      "IfcSIUnit",
+      "IfcConversionBasedUnit",
+      "IfcUnitAssignment",
+      "IfcMeasureWithUnit",
+      "IfcDimensionalExponents",
+      "IfcDerivedUnit"
+    ],
+    "Material": [
+      "IfcMaterial",
+      "IfcMaterialLayer",
+      "IfcMaterialLayerSet",
+      "IfcMaterialLayerSetUsage",
+      "IfcMaterialList",
+      "IfcMaterialProfile"
+    ],
+    "Presentation Appearance": [
+      "IfcSurfaceStyle",
+      "IfcSurfaceStyleRendering",
+      "IfcSurfaceStyleShading",
+      "IfcColourRgb",
+      "IfcPresentationStyleAssignment"
+    ],
+    "Property": [
+      "IfcPropertySet",
+      "IfcPropertySingleValue",
+      "IfcPropertyEnumeratedValue",
+      "IfcComplexProperty"
+    ],
+    "Utility": [
+      "IfcOwnerHistory",
+      "IfcApplication",
+      "IfcTable"
+    ],
+    "Actor": [
+      "IfcPerson",
+      "IfcOrganization",
+      "IfcPersonAndOrganization",
+      "IfcActorRole"
+    ],
+    "External Reference": [
+      "IfcClassification",
+      "IfcClassificationReference",
+      "IfcDocumentReference",
+      "IfcLibraryReference"
+    ],
+    "DateTime": [
+      "IfcDateTime",
+      "IfcDuration",
+      "IfcTimePeriod"
+    ],
+    "Quantity": [
+      "IfcElementQuantity",
+      "IfcQuantityLength",
+      "IfcQuantityArea",
+      "IfcQuantityVolume",
+      "IfcQuantityWeight",
+      "IfcQuantityCount"
+    ]
+  }
+}
