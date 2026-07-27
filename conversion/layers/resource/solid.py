@@ -9,35 +9,63 @@ from .profile import read_profile
 from conversion.layers.resource.triangulate import triangulate_2d, triangulate_3d
 
 
+def _ring_signed_area(ring):
+    total = 0.0
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        total += x1 * y2 - x2 * y1
+    return total / 2.0
+
+
 def extruded_area_solid(solid):
-    ring = read_profile(solid.SweptArea)
+    ring, holes = read_profile(solid.SweptArea)
     if len(ring) < 3:
         return Mesh()
+
+    # Normalise winding once, up front. Everything downstream — cap
+    # triangulation and the side-quad loop — needs to agree on which
+    # direction is "outward"; an authored-clockwise profile previously made
+    # caps and sides face opposite ways.
+    if _ring_signed_area(ring) < 0:
+        ring = ring[::-1]
+    holes = [h[::-1] if _ring_signed_area(h) < 0 else h for h in holes]
 
     depth = float(solid.Depth)
     direction = read_direction(solid.ExtrudedDirection, (0.0, 0.0, 1.0))
     offset = scale(direction, depth)
 
     mesh = Mesh()
-    bottom = [(x, y, 0.0) for x, y in ring]
-    top = [(x + offset[0], y + offset[1], offset[2]) for x, y in ring]
+
+    if holes:
+        # Bridge holes into the outer ring so a single triangulated cap can
+        # be extruded. triangulate_3d does the bridging and hands back the
+        # ring in step with its triangle indices.
+        outer3d = [(x, y, 0.0) for x, y in ring]
+        holes3d = [[(x, y, 0.0) for x, y in hole] for hole in holes]
+        cap_ring, caps = triangulate_3d(outer3d, holes3d)
+        bottom = cap_ring
+        top = [(x + offset[0], y + offset[1], z + offset[2]) for x, y, z in cap_ring]
+    else:
+        bottom = [(x, y, 0.0) for x, y in ring]
+        top = [(x + offset[0], y + offset[1], offset[2]) for x, y in ring]
+        caps = triangulate_2d(ring)
 
     bottom_idx = mesh.add_polygon_ring(bottom)
     top_idx = mesh.add_polygon_ring(top)
 
-    caps = triangulate_2d(ring)
     for a, b, c in caps:
         mesh.add_triangle(bottom_idx[c], bottom_idx[b], bottom_idx[a])
         mesh.add_triangle(top_idx[a], top_idx[b], top_idx[c])
 
-    count = len(ring)
+    count = len(bottom)
     for i in range(count):
         j = (i + 1) % count
         mesh.add_triangle(bottom_idx[i], bottom_idx[j], top_idx[j])
         mesh.add_triangle(bottom_idx[i], top_idx[j], top_idx[i])
 
     return mesh.transformed(axis_placement_matrix(solid.Position))
-
 
 def faceted_brep(brep):
     mesh = Mesh()
