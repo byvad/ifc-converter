@@ -1,3 +1,5 @@
+# @author: Davy Bellens
+
 import os
 import re
 from urllib.parse import unquote
@@ -38,7 +40,8 @@ def _tree_rows(selection):
     return rows
 
 def _local_path(value):
-    """Turn whatever QML hands over into a real OS path.
+    """
+    Turn whatever QML hands over into a real OS path.
 
     Handles: QUrl, a full 'file:///C:/...' URL, and a URL whose scheme was
     already stripped on the QML side leaving '/C:/...' or '\\C:\\...'.
