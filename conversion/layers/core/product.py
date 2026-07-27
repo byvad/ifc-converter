@@ -2,8 +2,10 @@
 
 """Product schema: resolving spatial placement and representation."""
 
+from conversion.layers.core.openings import openings_of
 from conversion.layers.resource import (
     Mesh,
+    boolean,
     UnsupportedGeometry,
     build_item,
     local_placement_matrix,
@@ -26,6 +28,7 @@ class ProductGeometry:
         self.items_built = 0
         self.styled_before_material = 0
         self.styled_by_material = False
+        self.openings_cut = 0
 
     @property
     def styled(self):
@@ -50,7 +53,7 @@ def has_shape(product):
     return rep is not None and getattr(rep, "Representations", None)
 
 
-def resolve(product, include_openings=False, palette=None):
+def resolve(product, include_openings=True, palette=None):
     """Descend from a Core-layer product to a placed, styled mesh."""
     result = ProductGeometry(product)
     styles = palette is not None
@@ -79,6 +82,16 @@ def resolve(product, include_openings=False, palette=None):
 
     placement = local_placement_matrix(getattr(product, "ObjectPlacement", None))
     result.mesh = result.mesh.transformed(placement)
+
+    if include_openings:
+        cutters = []
+        for opening in openings_of(product):
+            void = resolve(opening, include_openings=False, palette=None)
+            if void.has_geometry:
+                cutters.append(void.mesh)
+        if cutters:
+            result.mesh = boolean.subtract(result.mesh, cutters)
+            result.openings_cut = len(cutters)
 
     if palette is not None:
         result.styled_before_material = len(result.mesh.groups)
