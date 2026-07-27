@@ -1,0 +1,14 @@
+{
+    "name": "Conversion.Layers.Resource",
+    "rootNamespace": "Conversion.Layers.Resource",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
