@@ -62,17 +62,32 @@ def _transformation_operator_matrix(op):
     if op is None:
         return IDENTITY
     origin = read_point(op.LocalOrigin)
-    factor = float(getattr(op, "Scale", None) or 1.0)
-    x_axis = normalize(read_direction(getattr(op, "Axis1", None), (1.0, 0.0, 0.0)))
+
+    non_uniform = op.is_a("IfcCartesianTransformationOperator3DnonUniform")
+    scale1 = float(getattr(op, "Scale", None) or 1.0)
+    scale2 = float(getattr(op, "Scale2", None) or scale1) if non_uniform else scale1
+    scale3 = float(getattr(op, "Scale3", None) or scale1) if non_uniform else scale1
+
     z_axis = normalize(read_direction(getattr(op, "Axis3", None), (0.0, 0.0, 1.0)))
+    x_axis = normalize(read_direction(getattr(op, "Axis1", None), (1.0, 0.0, 0.0)))
     projected = subtract(x_axis, scale(z_axis, dot(x_axis, z_axis)))
     if dot(projected, projected) < 1e-20:
         projected = (1.0, 0.0, 0.0)
     x_axis = normalize(projected)
-    y_axis = cross(z_axis, x_axis)
+
+    # When Axis2 is actually supplied, take it as authored rather than
+    # re-deriving it from X and Z. A mirrored mapping target (left/right-hand
+    # instance) is commonly expressed by an Axis2 that is *not* simply
+    # cross(Z, X); deriving it instead silently un-mirrors the instance.
+    axis2 = getattr(op, "Axis2", None)
+    if axis2 is not None:
+        y_axis = normalize(read_direction(axis2, (0.0, 1.0, 0.0)))
+    else:
+        y_axis = cross(z_axis, x_axis)
+
     return (
-        (x_axis[0] * factor, y_axis[0] * factor, z_axis[0] * factor, origin[0]),
-        (x_axis[1] * factor, y_axis[1] * factor, z_axis[1] * factor, origin[1]),
-        (x_axis[2] * factor, y_axis[2] * factor, z_axis[2] * factor, origin[2]),
+        (x_axis[0] * scale1, y_axis[0] * scale2, z_axis[0] * scale3, origin[0]),
+        (x_axis[1] * scale1, y_axis[1] * scale2, z_axis[1] * scale3, origin[1]),
+        (x_axis[2] * scale1, y_axis[2] * scale2, z_axis[2] * scale3, origin[2]),
         (0.0, 0.0, 0.0, 1.0),
     )
