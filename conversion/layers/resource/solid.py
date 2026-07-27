@@ -36,6 +36,13 @@ def extruded_area_solid(solid):
     direction = read_direction(solid.ExtrudedDirection, (0.0, 0.0, 1.0))
     offset = scale(direction, depth)
 
+    # The profile sits in the local XY plane with its normal on +Z. If the
+    # sweep actually travels along -Z the solid comes out inverted, so flip
+    # the profile to compensate.
+    if offset[2] < 0.0:
+        ring = ring[::-1]
+        holes = [h[::-1] for h in holes]
+
     mesh = Mesh()
 
     if holes:
