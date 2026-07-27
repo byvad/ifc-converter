@@ -4,7 +4,7 @@
 
 import math
 from conversion.layers.resource.math3d import IDENTITY, mat_apply
-from conversion.layers.resource.placement import axis_placement_matrix
+from conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
 
 CIRCLE_SEGMENTS = 24
 
@@ -41,8 +41,54 @@ def _circle_points(radius, segments=CIRCLE_SEGMENTS):
     ]
 
 
+def _normalize_2d(v):
+    length = math.hypot(v[0], v[1])
+    if length < 1e-12:
+        raise ValueError("Cannot normalize a zero-length 2D vector")
+    return (v[0] / length, v[1] / length)
+
+
+def _apply_2d(matrix, point):
+    x, y, _ = mat_apply(matrix, (point[0], point[1], 0.0))
+    return (x, y)
+
+
+def _operator_2d_matrix(operator):
+    """IfcCartesianTransformationOperator2D(nonUniform) -> 4x4 matrix.
+
+    This is a *transformation operator* (Axis1/Axis2/LocalOrigin/Scale/Scale2),
+    not an axis placement (Axis/RefDirection/Location). The two entities look
+    superficially similar but axis_placement_matrix expects the latter and
+    will blow up on .Location, which operators don't have.
+    """
+    origin = read_point(operator.LocalOrigin)
+    scale1 = float(getattr(operator, "Scale", None) or 1.0)
+
+    non_uniform = operator.is_a("IfcCartesianTransformationOperator2DnonUniform")
+    scale2 = float(getattr(operator, "Scale2", None) or scale1) if non_uniform else scale1
+
+    x_dir = read_direction(getattr(operator, "Axis1", None), (1.0, 0.0, 0.0))
+    x_axis = _normalize_2d((x_dir[0], x_dir[1]))
+
+    axis2 = getattr(operator, "Axis2", None)
+    if axis2 is not None:
+        y_dir = read_direction(axis2, (0.0, 1.0, 0.0))
+        y_axis = _normalize_2d((y_dir[0], y_dir[1]))
+    else:
+        y_axis = (-x_axis[1], x_axis[0])
+
+    return (
+        (x_axis[0] * scale1, y_axis[0] * scale2, 0.0, origin[0]),
+        (x_axis[1] * scale1, y_axis[1] * scale2, 0.0, origin[1]),
+        (0.0, 0.0, 1.0, origin[2] if len(origin) > 2 else 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+
+
 def read_profile(profile):
+    """Returns (outer_points, holes) where holes is a list of point rings."""
     name = profile.is_a()
+    holes = []
 
     if name == "IfcRectangleProfileDef" or name == "IfcRoundedRectangleProfileDef":
         half_x = float(profile.XDim) / 2.0
@@ -51,6 +97,12 @@ def read_profile(profile):
 
     elif name in ("IfcCircleProfileDef", "IfcCircleHollowProfileDef"):
         points = _circle_points(float(profile.Radius))
+        if name == "IfcCircleHollowProfileDef":
+            wall = getattr(profile, "WallThickness", None)
+            if wall:
+                inner_radius = float(profile.Radius) - float(wall)
+                if inner_radius > 0:
+                    holes = [_circle_points(inner_radius)]
 
     elif name == "IfcEllipseProfileDef":
         a, b = float(profile.SemiAxis1), float(profile.SemiAxis2)
@@ -60,14 +112,25 @@ def read_profile(profile):
             for i in range(CIRCLE_SEGMENTS)
         ]
 
-    elif name in ("IfcArbitraryClosedProfileDef", "IfcArbitraryProfileDefWithVoids"):
+    elif name == "IfcArbitraryClosedProfileDef":
         points = _read_curve_2d(profile.OuterCurve)
 
+    elif name == "IfcArbitraryProfileDefWithVoids":
+        points = _read_curve_2d(profile.OuterCurve)
+        for inner in profile.InnerCurves or []:
+            hole_points = _read_curve_2d(inner)
+            if len(hole_points) > 1 and hole_points[0] == hole_points[-1]:
+                hole_points.pop()
+            holes.append(hole_points)
+
     elif name == "IfcDerivedProfileDef":
-        base = read_profile(profile.ParentProfile)
-        matrix = axis_placement_matrix(profile.Operator.LocalOrigin) \
-            if hasattr(profile.Operator, "LocalOrigin") else IDENTITY
-        return [mat_apply(matrix, (x, y, 0.0))[:2] for x, y in base]
+        base_points, base_holes = read_profile(profile.ParentProfile)
+        matrix = _operator_2d_matrix(profile.Operator)
+        points = [_apply_2d(matrix, p) for p in base_points]
+        holes = [[_apply_2d(matrix, p) for p in hole] for hole in base_holes]
+        # The Operator already carries the full transform for derived
+        # profiles; there is no separate Position to apply on top.
+        return points, holes
 
     else:
         raise NotImplementedError(f"Profile type not supported: {name}")
@@ -76,8 +139,9 @@ def read_profile(profile):
     if position is not None:
         matrix = axis_placement_matrix(position)
         points = [mat_apply(matrix, (x, y, 0.0))[:2] for x, y in points]
+        holes = [[mat_apply(matrix, (x, y, 0.0))[:2] for x, y in hole] for hole in holes]
 
-    return points
+    return points, holes
 
 
 def _read_curve_2d(curve):
