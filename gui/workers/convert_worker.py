@@ -1,3 +1,5 @@
+# @author: Davy Bellens
+
 import traceback
 from PySide6.QtCore import QObject, Signal
 
