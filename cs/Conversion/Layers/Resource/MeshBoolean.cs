@@ -490,6 +490,83 @@ namespace Conversion.Layers.Resource
             return mesh;
         }
 
+        /// <summary>Union of two solids. Backs IfcBooleanResult with operator UNION.</summary>
+        public static Mesh Union(Mesh a, Mesh b) => Pair(a, b, Operation.Union);
+
+        /// <summary>Intersection of two solids. Backs INTERSECTION, and bounds a
+        /// polygonally bounded half space against its base plane.</summary>
+        public static Mesh Intersect(Mesh a, Mesh b) => Pair(a, b, Operation.Intersect);
+
+        private enum Operation { Union, Intersect }
+
+        private static Mesh Pair(Mesh a, Mesh b, Operation operation)
+        {
+            if (a == null || a.Triangles.Count == 0)
+            {
+                return operation == Operation.Union ? b : a;
+            }
+            if (b == null || b.Triangles.Count == 0)
+            {
+                return operation == Operation.Union ? a : new Mesh();
+            }
+            if (a.Triangles.Count + b.Triangles.Count > MaxPolygons)
+            {
+                return a;
+            }
+
+            double eps = EpsilonFor(a, new[] { b });
+
+            try
+            {
+                var left = new Node(eps);
+                left.Build(ToPolygons(a, keepStyle: true));
+                var right = new Node(eps);
+                right.Build(ToPolygons(b, keepStyle: true));
+
+                if (operation == Operation.Union)
+                {
+                    left.ClipTo(right);
+                    right.ClipTo(left);
+                    right.Invert();
+                    right.ClipTo(left);
+                    right.Invert();
+                    left.Build(right.AllPolygons());
+                }
+                else
+                {
+                    left.Invert();
+                    right.ClipTo(left);
+                    right.Invert();
+                    left.ClipTo(right);
+                    right.ClipTo(left);
+                    left.Build(right.AllPolygons());
+                    left.Invert();
+                }
+
+                Mesh result = ToMesh(left.AllPolygons());
+
+                double volumeA = Math.Abs(a.SignedVolume());
+                double volumeB = Math.Abs(b.SignedVolume());
+                double produced = Math.Abs(result.SignedVolume());
+                double ceiling = operation == Operation.Union
+                    ? volumeA + volumeB
+                    : Math.Min(volumeA, volumeB);
+                if (ceiling > 0.0 && produced > ceiling * 1.001)
+                {
+                    return a;
+                }
+                return result;
+            }
+            catch (Exception exception) when (
+                exception is InsufficientExecutionStackException ||
+                exception is OutOfMemoryException ||
+                exception is InvalidOperationException ||
+                exception is ArgumentException)
+            {
+                return a;
+            }
+        }
+
         /// <summary>
         /// Return <paramref name="mesh"/> with every solid in <paramref name="cutters"/>
         /// removed. On any degeneracy the original mesh comes back unchanged.
@@ -541,7 +618,20 @@ namespace Conversion.Layers.Resource
                     solid.Invert();
                 }
 
-                return ToMesh(solid.AllPolygons());
+                Mesh result = ToMesh(solid.AllPolygons());
+
+                // A difference can only ever remove material. If the result claims
+                // more volume than it started with, the tree hit a degeneracy and
+                // produced nonsense — take the uncut solid instead. For an open
+                // shell both figures are meaningless and this rejects too, which is
+                // also the right answer, because a boolean on an open shell is not
+                // defined in the first place.
+                double before = Math.Abs(mesh.SignedVolume());
+                if (before > 0.0 && Math.Abs(result.SignedVolume()) > before * 1.001)
+                {
+                    return mesh;
+                }
+                return result;
             }
             catch (Exception exception) when (
                 exception is InsufficientExecutionStackException ||

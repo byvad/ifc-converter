@@ -1,7 +1,7 @@
 {
     "name": "Conversion.Layers.Resource",
     "rootNamespace": "Conversion.Layers.Resource",
-    "references": [],
+    "references": ["Conversion.Ifc"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

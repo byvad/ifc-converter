@@ -42,5 +42,5 @@ def emit(schema_name, out_path):
     return len(entities), len(text)
 
 for name in ("IFC2X3", "IFC4"):
-    count, size = emit(name, name.lower() + ".schema")
+    count, size = emit(name, name.lower() + ".txt")
     print(f"{name}: {count} entities, {size/1024:.1f} KB")
