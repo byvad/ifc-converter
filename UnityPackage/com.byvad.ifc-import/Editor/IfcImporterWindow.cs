@@ -53,8 +53,8 @@ namespace Conversion.Unity.Editor
 
         private void OnGUI()
         {
-            GUILayout.Label("IFC Model Import", EditorStyles.boldLabel);
             EditorGUILayout.Space();
+            GUILayout.Label("IFC Model Import", EditorStyles.boldLabel);
 
             EditorGUILayout.BeginHorizontal();
             _ifcFilePath = EditorGUILayout.TextField("IFC File", _ifcFilePath);
