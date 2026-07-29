@@ -2,13 +2,13 @@
 
 """Orchestrator for Resource layer solid generation."""
 
-import conversion.layers.resource.appearance as appearance
-from conversion.layers.resource.math3d import (
+import archive.conversion.layers.resource.appearance as appearance
+from archive.conversion.layers.resource.math3d import (
     IDENTITY, cross, dot, mat_multiply, normalize, scale, subtract
 )
-from conversion.layers.resource.mesh import Mesh
-from conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
-from conversion.layers.resource.solid import (
+from archive.conversion.layers.resource.mesh import Mesh
+from archive.conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
+from archive.conversion.layers.resource.solid import (
     extruded_area_solid, faceted_brep, polygonal_face_set, surface_model, triangulated_face_set
 )
 

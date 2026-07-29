@@ -5,8 +5,8 @@ from PySide6.QtCore import QObject, Signal
 import traceback
 import ifcopenshell
 
-import conversion.layers.selection as selection
-import conversion.layers.core.units as units
+import archive.conversion.layers.selection as selection
+import archive.conversion.layers.core.units as units
 
 
 class InspectWorker(QObject):

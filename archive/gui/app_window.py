@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
-from gui.bridge import Bridge
+from archive.gui.bridge import Bridge
 
 QML_DIR = Path(__file__).parent / "qml"
 MAIN_QML = QML_DIR / "main.qml"

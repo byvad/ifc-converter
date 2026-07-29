@@ -2,7 +2,7 @@
 
 """Mesh: the thing we are building on the way back up."""
 
-from conversion.layers.resource.math3d import mat_apply, scale
+from archive.conversion.layers.resource.math3d import mat_apply, scale
 
 class Mesh:
     def __init__(self):

@@ -3,7 +3,7 @@
 import traceback
 from PySide6.QtCore import QObject, Signal
 
-from conversion.convert import convert
+from archive.conversion.convert import convert
 
 class ConvertWorker(QObject):
     progress = Signal(int, int, str)

@@ -6,8 +6,8 @@ from urllib.parse import unquote
 
 from PySide6.QtCore import QObject, Slot, QThread, QUrl, QDir
 
-from gui.workers import InspectWorker, ConvertWorker
-from conversion.convert import output_obj_path
+from archive.gui.workers import InspectWorker, ConvertWorker
+from archive.conversion.convert import output_obj_path
 
 # Descent order for the tree. If the taxonomy package exports this, import
 # it instead of keeping a second copy here.

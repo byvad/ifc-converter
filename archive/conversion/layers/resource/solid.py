@@ -2,11 +2,11 @@
 
 """Geometric Model schema: solids -> Mesh."""
 
-from conversion.layers.resource.math3d import scale
-from conversion.layers.resource.mesh import Mesh
-from conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
+from archive.conversion.layers.resource.math3d import scale
+from archive.conversion.layers.resource.mesh import Mesh
+from archive.conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
 from .profile import read_profile
-from conversion.layers.resource.triangulate import triangulate_2d, triangulate_3d
+from archive.conversion.layers.resource.triangulate import triangulate_2d, triangulate_3d
 
 
 def _ring_signed_area(ring):

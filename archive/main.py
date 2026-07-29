@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtGui import QGuiApplication
-from gui import AppWindow
+from archive.gui import AppWindow
 
 def main():
     app = QGuiApplication(sys.argv)

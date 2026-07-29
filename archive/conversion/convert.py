@@ -33,11 +33,11 @@ from pathlib import Path
 import ifcopenshell
 
 # Updated imports to match the new modular architecture
-import conversion.layers.selection as product_layer
-import conversion.layers.core as core_layer
-import conversion.layers.resource.appearance as appearance
+import archive.conversion.layers.selection as product_layer
+import archive.conversion.layers.core as core_layer
+import archive.conversion.layers.resource.appearance as appearance
 
-from conversion.layers.resource.triangulate import HOLE_STATS
+from archive.conversion.layers.resource.triangulate import HOLE_STATS
 
 OUT_ROOT = os.fspath(Path(__file__).resolve().parents[1] / "output")
 

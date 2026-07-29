@@ -2,7 +2,7 @@
 
 """Polygon triangulation and hole bridging algorithms."""
 
-from conversion.layers.resource.math3d import cross, dot, normalize
+from archive.conversion.layers.resource.math3d import cross, dot, normalize
 
 
 def _signed_area_2d(poly):

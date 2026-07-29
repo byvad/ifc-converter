@@ -3,8 +3,8 @@
 """Profile schema: 2D cross-sections, returned as lists of (x, y)."""
 
 import math
-from conversion.layers.resource.math3d import IDENTITY, mat_apply
-from conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
+from archive.conversion.layers.resource.math3d import IDENTITY, mat_apply
+from archive.conversion.layers.resource.placement import axis_placement_matrix, read_direction, read_point
 
 CIRCLE_SEGMENTS = 24
 

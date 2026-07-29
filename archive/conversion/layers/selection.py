@@ -16,7 +16,7 @@ out which products to convert, and which conceptual schema each belongs to.
 The moment a product is chosen, the descent hands off to the Core layer.
 """
 
-from conversion.ifc.classification import Domain, InterOperability, classify_instance
+from archive.conversion.ifc.classification import Domain, InterOperability, classify_instance
 
 # Openings carry real geometry (the void volume) but must not be drawn, and
 # spaces are volumes of air. Both are Core/Product-schema entities rather than

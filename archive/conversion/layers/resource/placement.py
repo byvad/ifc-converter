@@ -2,7 +2,7 @@
 
 """Geometric Constraint and Geometry schemas: points, directions, placements."""
 
-from conversion.layers.resource.math3d import (
+from archive.conversion.layers.resource.math3d import (
     IDENTITY, cross, dot, mat_multiply, normalize, scale, subtract
 )
 

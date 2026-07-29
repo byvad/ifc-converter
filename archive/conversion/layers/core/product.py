@@ -2,13 +2,10 @@
 
 """Product schema: resolving spatial placement and representation."""
 
-from conversion.layers.core.openings import openings_of
-from conversion.layers.resource import (
-    Mesh,
+from archive.conversion.layers.core.openings import openings_of
+from archive.conversion.layers.resource import Mesh, UnsupportedGeometry, build_item, local_placement_matrix
+from archive.conversion.layers.resource import (
     boolean,
-    UnsupportedGeometry,
-    build_item,
-    local_placement_matrix,
 )
 
 MESHABLE_IDENTIFIERS = {"Body", "Facetation", None}

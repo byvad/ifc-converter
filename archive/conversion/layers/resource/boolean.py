@@ -20,7 +20,7 @@ the cut have no style of their own and fall through to the product's
 material, which is what Core fills in afterwards.
 """
 
-from conversion.layers.resource.mesh import Mesh
+from archive.conversion.layers.resource.mesh import Mesh
 
 # Split tolerance, as a fraction of the model's own extent. IFC files are
 # routinely authored in millimetres with site coordinates in the tens of
