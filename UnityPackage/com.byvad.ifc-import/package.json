@@ -5,7 +5,7 @@
   "description": "Load IFC building models directly into Unity at runtime, with no external dependencies.",
   "unity": "6000.0",
   "dependencies": {
-    "com.unity.render-pipelines.universal": "17.0.0"
+    "com.unity.render-pipelines.universal": "14.0.0"
   },
   "keywords": ["ifc", "bim", "architecture", "cad", "import"],
   "author": { "name": "byvad" }
