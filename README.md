@@ -1,92 +1,161 @@
-# IFC Converter
+# IFC Import for Unity
 
-!["Cover image"](/img/ifc-import-cover.png)
+![Cover image](img/ifc-import-cover.png)
 
-## Introduction
+Load Industry Foundation Classes (IFC) building models directly into Unity —
+at runtime or from the Editor — with no external tools, no Python, and no
+server round-trip.
 
-This repository contains a utility for converting Industry Foundation Classes (IFC) files into Wavefront OBJ models. The tool generates both the OBJ geometry file and the associated MTL material definition file.
+The package parses `.ifc` files itself (a from-scratch STEP Part 21 reader),
+resolves geometry through its own resource pipeline (extrusions, breps,
+booleans for opening cuts), and builds the scene directly. Nothing outside
+Unity's own APIs is required at runtime.
 
-It is a modular, layer-by-layer converter. Rather than treating the IFC file as a flat list of geometry, this converter acts as a conceptual layer descent. It utilizes `ifcopenshell` purely as a STEP parser to read the entity graph, making all subsequent geometric and material decisions internally by walking down the IFC hierarchy.
+![A full building imported into the Unity Scene view, with materials and cut openings](img/output-of-convert-with-default-values.png)
 
-### Architecture: The Layer Descent
-
-The conversion process is structured around the four IFC conceptual layers, moving from abstract definitions down to concrete geometry:
-
-* **Domain & Interoperability (Selection):** The entry point of the descent, determining exactly which products should be converted.
-* **Core (Placement & Representation):** Resolves the spatial placement and representation for the selected products.
-* **Resource (Geometry & Topology):** Handles the mathematical generation of the meshes and actual coordinates.
-
-## Requirements
-
-- Python 3.x
-- Dependencies listed in `requirements.txt`
+*The sample castle model, imported with default options — walls, windows,
+and doors correctly cut and materials resolved, straight from the `.ifc`
+file above.*
 
 ## Installation
 
-Install the required Python packages:
+Via the Unity Package Manager, using a git URL:
 
-    pip install -r requirements.txt
+```
+https://github.com/byvad/ifc-converter.git?path=/UnityPackage/com.byvad.ifc-import#v0.3.0
+```
 
-## Command-Line Interface (CLI)
+**Window > Package Manager > + > Install package from git URL**, paste the
+above.
 
-Execute the converter using the Python interpreter:
+Verified on Unity 6000.3.4f1 and Unity 2022.3 LTS, and with URP 14. Supports IFC2X3 and IFC4.
 
-    python convert.py <ifc_file> [<obj_file>] [options]
+## Quick start — runtime loading
 
-**Configuration Arguments:**
+Copy an `.ifc` file into `Assets/StreamingAssets/`, then:
 
-| Argument | Description |
-| :--- | :--- |
-| `--layer` | Restricts conversion to specific conceptual layers. |
-| `--schema` | Filters the conversion by specific IFC schemas. |
-| `--class` | Limits conversion to exact IFC classes. |
-| `--up-axis` | Sets the output up-axis to `z` (IFC native) or `y` (most OBJ viewers). |
-| `--keep-units` | Do not rescale the geometry to metres. |
-| `--no-colour` | Skips appearance resolution and writes no `.mtl`. |
-| `--min-alpha` | Sets a minimum opacity floor on transparency. |
-| `--linear` | Converts color profiles from sRGB to linear before writing. |
-| `--report` | Prints the layer breakdown and conversion report. |
-| `--out-root` | Defines the root directory for the per-model output folders. |
+```csharp
+using UnityEngine;
+using System.IO;
+using Conversion.Unity;
 
-## Desktop GUI Application
+public class IfcTest : MonoBehaviour
+{
+    void Start()
+    {
+        string path = Path.Combine(Application.streamingAssetsPath, "MyModel.ifc");
+        var loader = gameObject.AddComponent<IfcRuntimeLoader>();
 
-For a more visual workflow, the project includes a standalone desktop application built with PySide6 and QML.
+        loader.Load(path,
+            new IfcLoadOptions { MinAlpha = 0.25 },
+            OnComplete,
+            OnProgress);
+    }
 
-**Key Features:**
+    void OnProgress(float fraction, string stage) => Debug.Log($"[IFC] {stage} — {fraction:P0}");
 
-* **Drag-and-Drop:** Quickly load `.ifc` files by dropping them into the application.
-* **Pre-conversion Inspection:** The app reads the file and displays a hierarchical tree of the file's contents.
-* **Granular Statistics:** The inspection view categorizes and counts the internal products by layer, schema, and specific IFC class.
-* **Visual Toggles:** Exposes core CLI features—like Y-up axis rotation, unit rescaling, color resolution, and glass transparency preservation—through UI checkboxes and dropdowns.
+    void OnComplete(IfcLoadResult result)
+    {
+        if (!result.Succeeded)
+        {
+            Debug.LogError($"[IFC] Load failed: {result.Error}");
+            return;
+        }
+        Debug.Log($"[IFC] {result.Nodes} nodes, {result.Renderers} renderers, " +
+                  $"{result.Triangles} tris, {result.Materials} materials, " +
+                  $"{result.OpeningsCut} openings cut.");
+    }
+}
+```
 
-## Unity Integration
+Parsing and geometry resolution run on a worker thread; scene instantiation
+happens on the main thread in frame-budgeted batches, so a large model does
+not freeze the game while it loads.
 
-A custom C# Editor plugin is provided to convert and import IFC models seamlessly inside the Unity Editor without relying on external third-party OBJ importers.
+## Quick start — Editor import
 
-1. Place the `IFCImporterWindow.cs` script into an `Editor` folder inside your Unity project (e.g., `Assets/Editor/`).
-2. In the Unity top menu bar, navigate to **IFC Converter > Import IFC model**.
+**IFC > Import IFC Model...** opens an import window.
 
-![Unity Menu Bar](img/menu-bar.png)
+![The IFC menu item in Unity's top menu bar](img/menu-bar.png)
 
-3. This opens the importer panel.
+Pick a file, set options, click Import — the model is instantiated directly
+into the open scene, with full Undo support.
 
-![Unconfigured Importer Panel](img/import-menu.png)
+![The import window with a file selected and default options](img/import-menu-file-selected.png)
 
-4. In the **Environment Configuration** section, point the tool to your local Python executable and the `convert.py` script.
-5. Select your source `.ifc` file, adjust your desired settings (such as keeping the Unity-friendly Y-Up rotation), and set your output folder (defaults to `Assets/ImportedModels`).
+Editor import runs synchronously with a progress bar — typically a few
+seconds for a large model.
 
-![Configured Importer Panel](img/configured-import-menu.png)
+## Filtering by class
 
-6. Click **Convert & Import IFC**. The tool will run the Python conversion descent, load the generated files into the Asset Database, and automatically instantiate the 3D model into your active scene.
+The **Class Filter** field restricts import to specific IFC classes.
+Comma-separated, e.g. `IfcWall,IfcWindow`. Empty imports everything.
 
-## Output
+![The import window with Class Filter set to IfcWindow](img/import-manu-with-window-class-filter.png)
 
-Upon successful conversion, the tool creates an output directory within the `output` folder. The directory is named after the source IFC file and includes:
+Importing the same file with `IfcWindow` in the filter brings in only the
+windows — every other element (walls, roof, floors) is skipped entirely:
 
-- OBJ file
-- MTL file
+![Only the windows imported, floating in their original world positions](img/output-of-convert-with-window-class-filter.png)
 
-For example, converting `VeryBeautifulHouse.ifc` produces:
+Useful for isolating one category from a large model, or building up a scene
+in passes.
 
-    output/VeryBeautifulHouse/VeryBeautifulHouse.obj
-    output/VeryBeautifulHouse/VeryBeautifulHouse.mtl
+## Options
+
+| `IfcLoadOptions` field | Default | Description |
+| :--- | :--- | :--- |
+| `IncludeOpenings` | `true` | Subtract `IfcRelVoidsElement` openings from their host. Off leaves every window/door buried in solid wall. |
+| `Colour` | `true` | Resolve IFC surface styles and materials into URP materials. |
+| `MinAlpha` | `0.25` | Opacity floor. IFC glazing is routinely authored fully transparent, which otherwise renders as invisible. |
+| `SplitForFlatShading` | `true` | Split shared vertices so faces shade flat instead of smoothing across hard edges like wall corners. |
+| `Layers` / `Schemas` / `Classes` | none | Restrict the import to specific conceptual layers, IFC schemas, or exact IFC classes (e.g. `IfcWall`, `IfcWindow`). |
+
+## Known limitations
+
+- No mesh instancing yet for repeated elements (e.g. identical windows via
+  `IfcMappedItem`) — every element is a separate mesh and renderer.
+- No `ScriptedImporter` — dropping an `.ifc` file into the Project window
+  does not yet produce a prefab automatically; use the menu import or the
+  runtime loader.
+- Editor import blocks the UI thread while it runs.
+- A handful of exotic geometry types (some boolean unions/intersections
+  against non-planar solids) may be skipped; unsupported items are reported
+  in the load result.
+
+## Architecture: the layer descent
+
+The conversion walks the four IFC conceptual layers, top to bottom, rather
+than treating the file as a flat list of geometry:
+
+- **Domain & Interoperability (Selection)** — decides which products get
+  converted.
+- **Core (Placement & Representation)** — resolves spatial placement,
+  representation items, and opening voids for each selected product.
+- **Resource (Geometry & Appearance)** — the mathematics: profiles, swept
+  solids, breps, mesh booleans, and surface style resolution.
+
+## Acknowledgements
+
+Development and testing used the excellent sample `.ifc` files from [youshengCode/IfcSampleFiles](https://github.com/youshengCode/IfcSampleFiles) — including the castle model shown in the screenshots above. Not affiliated with this project; credit for the test data belongs entirely to them. If you're looking for more real-world IFC files to test against, that repo is a great place to start.
+
+## Also in this repository
+
+[`archive/`](archive/) holds earlier prototypes that led to this package: a
+Python CLI and PySide6 desktop GUI that convert IFC to Wavefront OBJ/MTL
+(using `ifcopenshell`), and intermediate C# drafts from before the package
+settled into its current shape. They're kept for anyone curious about how
+this got here, but they're not part of the Unity package, not installed by
+it, and not actively maintained — treat them as historical reference, not a
+supported tool.
+
+## License
+
+Source code is MIT-licensed — see
+[LICENSE.md](UnityPackage/com.byvad.ifc-import/LICENSE.md).
+
+The bundled IFC schema tables are derived from buildingSMART's IFC
+specification (CC BY-ND 4.0), and the tool used to generate them is a
+build-time-only dependency. See
+[Third Party Notices.md](UnityPackage/com.byvad.ifc-import/Third%20Party%20Notices.md)
+for full attribution.
