@@ -1,0 +1,19 @@
+{
+    "name": "Conversion.Unity",
+    "rootNamespace": "Conversion.Unity",
+    "references": [
+        "Conversion.Ifc",
+        "Conversion.Layers",
+        "Conversion.Layers.Core",
+        "Conversion.Layers.Resource"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

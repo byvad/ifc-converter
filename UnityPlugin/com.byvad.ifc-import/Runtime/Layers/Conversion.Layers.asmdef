@@ -1,0 +1,16 @@
+{
+    "name": "Conversion.Layers",
+    "rootNamespace": "Conversion.Layers",
+    "references": [
+        "Conversion.Ifc"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
