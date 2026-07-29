@@ -1,0 +1,22 @@
+{
+    "name": "Conversion.Unity.Editor",
+    "rootNamespace": "Conversion.Unity.Editor",
+    "references": [
+        "Conversion.Ifc",
+        "Conversion.Layers",
+        "Conversion.Layers.Core",
+        "Conversion.Layers.Resource",
+        "Conversion.Unity"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
