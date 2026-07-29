@@ -1,5 +1,7 @@
 # IFC Converter
 
+!["Cover image"](/img/ifc-import-cover.png)
+
 ## Introduction
 
 This repository contains a utility for converting Industry Foundation Classes (IFC) files into Wavefront OBJ models. The tool generates both the OBJ geometry file and the associated MTL material definition file.
