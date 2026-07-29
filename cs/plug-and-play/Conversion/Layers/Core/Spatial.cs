@@ -23,7 +23,7 @@ namespace Conversion.Layers.Core
     }
 
     /// <summary>One node of the spatial containment tree.</summary>
-    public sealed class SpatialNode
+    public class SpatialNode
     {
         public IfcEntity Entity { get; }
         public SpatialRelation Relation { get; }
