@@ -1,6 +1,6 @@
 {
   "name": "com.byvad.ifc-import",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "IFC Import",
   "description": "Load IFC building models directly into Unity at runtime, with no external dependencies.",
   "unity": "6000.0",
