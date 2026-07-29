@@ -8,5 +8,8 @@
     "com.unity.render-pipelines.universal": "14.0.0"
   },
   "keywords": ["ifc", "bim", "architecture", "cad", "import"],
-  "author": { "name": "byvad" }
+  "author": {
+    "name": "Davy Bellens",
+    "url": "https://github.com/byvad"
+  }
 }
