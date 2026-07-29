@@ -24,7 +24,7 @@ Guidelines for correct use.
 
 Source specification: https://technical.buildingsmart.org/standards/ifc/
 
-## Build-time tooling (tools/generate.py)
+## Build-time tooling (archive/tools/generate.py)
 
 The `.schema` tables above are produced from the official EXPRESS schema
 using ifcopenshell (https://ifcopenshell.org), licensed under the GNU
