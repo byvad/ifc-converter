@@ -1,0 +1,59 @@
+{
+  "layer": "InterOperability",
+  "schemas": {
+    "Shared Building": [
+      "IfcBeam",
+      "IfcBuildingElementPart",
+      "IfcBuildingElementProxy",
+      "IfcChimney",
+      "IfcColumn",
+      "IfcCovering",
+      "IfcCurtainWall",
+      "IfcDoor",
+      "IfcFooting",
+      "IfcMember",
+      "IfcPlate",
+      "IfcRailing",
+      "IfcRamp",
+      "IfcRampFlight",
+      "IfcRoof",
+      "IfcShadingDevice",
+      "IfcSlab",
+      "IfcStair",
+      "IfcStairFlight",
+      "IfcWall",
+      "IfcWallStandardCase",
+      "IfcWindow"
+    ],
+    "Shared Bldg Services": [
+      "IfcDistributionChamberElement",
+      "IfcDistributionElement",
+      "IfcDistributionControlElement",
+      "IfcDistributionFlowElement",
+      "IfcEnergyConversionDevice",
+      "IfcFlowController",
+      "IfcFlowFitting",
+      "IfcFlowMovingDevice",
+      "IfcFlowSegment",
+      "IfcFlowStorageDevice",
+      "IfcFlowTerminal",
+      "IfcFlowTreatmentDevice"
+    ],
+    "Shared Components": [
+      "IfcDiscreteAccessory",
+      "IfcFastener",
+      "IfcMechanicalFastener"
+    ],
+    "Shared Facilities": [
+      "IfcFurniture",
+      "IfcSystemFurnitureElement",
+      "IfcOccupant",
+      "IfcRelAssignsToActor"
+    ],
+    "Shared Management": [
+      "IfcCostItem",
+      "IfcCostSchedule",
+      "IfcProjectOrder"
+    ]
+  }
+}
