@@ -1,5 +1,4 @@
-using System;
-using System.Collections.Generic;
+// @author: Davy Bellens
 
 namespace Conversion.Ifc
 {
@@ -32,25 +31,30 @@ namespace Conversion.Ifc
 
     public static class Taxonomy
     {
-        public static readonly HashSet<string> DomainSchemas = new HashSet<string>
+        public const string DomainName = "Domain";
+        public const string InteroperabilityName = "Interoperability";
+        public const string CoreName = "Core";
+        public const string ResourceName = "Resource";
+
+        public static readonly HashSet<string> DomainSchemas = new()
         {
             "Building Controls", "Plumbing FireProtections", "Structural Elements",
             "Structural Analysis", "HVAC", "Electrical", "Architecture",
             "Construction Management",
         };
 
-        public static readonly HashSet<string> InteroperabilitySchemas = new HashSet<string>
+        public static readonly HashSet<string> InteroperabilitySchemas = new()
         {
             "Shared Bldg Services", "Shared Components", "Shared Building",
             "Shared Management", "Shared Facilities",
         };
 
-        public static readonly HashSet<string> CoreSchemas = new HashSet<string>
+        public static readonly HashSet<string> CoreSchemas = new()
         {
             "Control", "Product", "Process", "Kernel",
         };
 
-        public static readonly HashSet<string> ResourceSchemas = new HashSet<string>
+        public static readonly HashSet<string> ResourceSchemas = new()
         {
             "DateTime", "Material", "External Reference", "Geometric Constraint",
             "Geometric Model", "Geometry", "Actor", "Profile", "Property", "Quantity",
@@ -65,7 +69,7 @@ namespace Conversion.Ifc
         /// </summary>
         public static readonly string[] LayerOrder =
         {
-            "Domain", "Interoperability", "Core", "Resource",
+            DomainName, InteroperabilityName, CoreName, ResourceName,
         };
 
         /// <summary>Position in the hierarchy. Lower index means higher layer.</summary>
@@ -81,7 +85,7 @@ namespace Conversion.Ifc
 
     public sealed class DomainLayer : Layer
     {
-        public DomainLayer(string schema) : base("Domain", Taxonomy.DomainSchemas, schema)
+        public DomainLayer(string schema) : base(Taxonomy.DomainName, Taxonomy.DomainSchemas, schema)
         {
         }
     }
@@ -89,21 +93,21 @@ namespace Conversion.Ifc
     public sealed class InteroperabilityLayer : Layer
     {
         public InteroperabilityLayer(string schema)
-            : base("Interoperability", Taxonomy.InteroperabilitySchemas, schema)
+            : base(Taxonomy.InteroperabilityName, Taxonomy.InteroperabilitySchemas, schema)
         {
         }
     }
 
     public sealed class CoreLayer : Layer
     {
-        public CoreLayer(string schema) : base("Core", Taxonomy.CoreSchemas, schema)
+        public CoreLayer(string schema) : base(Taxonomy.CoreName, Taxonomy.CoreSchemas, schema)
         {
         }
     }
 
     public sealed class ResourceLayer : Layer
     {
-        public ResourceLayer(string schema) : base("Resource", Taxonomy.ResourceSchemas, schema)
+        public ResourceLayer(string schema) : base(Taxonomy.ResourceName, Taxonomy.ResourceSchemas, schema)
         {
         }
     }
