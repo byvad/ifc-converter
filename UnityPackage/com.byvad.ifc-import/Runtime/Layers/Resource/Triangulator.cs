@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 
@@ -382,18 +384,7 @@ namespace Conversion.Layers.Resource
 
             // Newell's method: robust on the slivers that breps are full of, where
             // a single cross product of three near-collinear points is noise.
-            double nx = 0.0, ny = 0.0, nz = 0.0;
-            for (int i = 0; i < points.Count; i++)
-            {
-                Vec3 current = points[i];
-                Vec3 following = points[(i + 1) % points.Count];
-                nx += (current.Y - following.Y) * (current.Z + following.Z);
-                ny += (current.Z - following.Z) * (current.X + following.X);
-                nz += (current.X - following.X) * (current.Y + following.Y);
-            }
-
-            var normal = new Vec3(nx, ny, nz);
-            if (normal.LengthSquared < 1e-20 || !normal.TryNormalize(out normal))
+            if (!Vec3.TryNewellNormal(points, 1e-20, out Vec3 normal))
             {
                 return (identity, new List<Tri>());
             }
