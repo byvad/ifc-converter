@@ -1,4 +1,7 @@
+// @author: Davy Bellens
+
 using System;
+using System.Collections.Generic;
 
 namespace Conversion.Layers.Resource
 {
@@ -67,12 +70,15 @@ namespace Conversion.Layers.Resource
         public double LengthSquared => X * X + Y * Y + Z * Z;
         public double Length => Math.Sqrt(LengthSquared);
 
+        /// <summary>Below this, a direction is treated as zero-length rather than divided by.</summary>
+        private const double MinNormalizableLength = 1e-12;
+
         /// <summary>Normalise, or report failure. Preferred over <see cref="Normalized"/> on
         /// anything read out of a file, where a zero-length direction is a real possibility.</summary>
         public bool TryNormalize(out Vec3 result)
         {
             double length = Length;
-            if (length < 1e-12)
+            if (length < MinNormalizableLength)
             {
                 result = Zero;
                 return false;
@@ -92,6 +98,34 @@ namespace Conversion.Layers.Resource
 
         public Vec2 XY => new Vec2(X, Y);
 
+        /// <summary>
+        /// Best-fit plane normal of a (possibly non-planar) ring via Newell's method —
+        /// robust on the near-collinear slivers real breps are full of, where a single
+        /// three-point cross product is noise. <paramref name="minLengthSquared"/> is
+        /// the caller's own tolerance for "too small to trust as a direction."
+        /// </summary>
+        public static bool TryNewellNormal(IReadOnlyList<Vec3> points, double minLengthSquared, out Vec3 normal)
+        {
+            double nx = 0.0, ny = 0.0, nz = 0.0;
+            int count = points.Count;
+            for (int i = 0; i < count; i++)
+            {
+                Vec3 current = points[i];
+                Vec3 following = points[(i + 1) % count];
+                nx += (current.Y - following.Y) * (current.Z + following.Z);
+                ny += (current.Z - following.Z) * (current.X + following.X);
+                nz += (current.X - following.X) * (current.Y + following.Y);
+            }
+
+            var candidate = new Vec3(nx, ny, nz);
+            if (candidate.LengthSquared < minLengthSquared || !candidate.TryNormalize(out normal))
+            {
+                normal = Zero;
+                return false;
+            }
+            return true;
+        }
+
         public bool Equals(Vec3 other) => X == other.X && Y == other.Y && Z == other.Z;
         public override bool Equals(object obj) => obj is Vec3 other && Equals(other);
 
@@ -107,5 +141,61 @@ namespace Conversion.Layers.Resource
         }
 
         public override string ToString() => $"({X:0.###}, {Y:0.###}, {Z:0.###})";
+    }
+
+    /// <summary>
+    /// Running axis-aligned min/max over a stream of points. Doubles rather than a
+    /// mutable Vec3, since Vec3 is immutable by design and rebuilding one per
+    /// updated component would be wasteful on what is often a per-vertex loop.
+    /// </summary>
+    public struct BoundsAccumulator
+    {
+        private double _minX, _minY, _minZ;
+        private double _maxX, _maxY, _maxZ;
+        private bool _any;
+
+        public static BoundsAccumulator Empty => new BoundsAccumulator(
+            double.MaxValue, double.MaxValue, double.MaxValue,
+            double.MinValue, double.MinValue, double.MinValue);
+
+        private BoundsAccumulator(double minX, double minY, double minZ, double maxX, double maxY, double maxZ)
+        {
+            _minX = minX; _minY = minY; _minZ = minZ;
+            _maxX = maxX; _maxY = maxY; _maxZ = maxZ;
+            _any = false;
+        }
+
+        public void Add(Vec3 point)
+        {
+            _any = true;
+            if (point.X < _minX) _minX = point.X;
+            if (point.Y < _minY) _minY = point.Y;
+            if (point.Z < _minZ) _minZ = point.Z;
+            if (point.X > _maxX) _maxX = point.X;
+            if (point.Y > _maxY) _maxY = point.Y;
+            if (point.Z > _maxZ) _maxZ = point.Z;
+        }
+
+        public void Add(IReadOnlyList<Vec3> points)
+        {
+            for (int i = 0; i < points.Count; i++)
+            {
+                Add(points[i]);
+            }
+        }
+
+        /// <summary>The accumulated bounds, or false (both corners at the origin) if nothing was added.</summary>
+        public bool TryGetBounds(out Vec3 min, out Vec3 max)
+        {
+            if (!_any)
+            {
+                min = Vec3.Zero;
+                max = Vec3.Zero;
+                return false;
+            }
+            min = new Vec3(_minX, _minY, _minZ);
+            max = new Vec3(_maxX, _maxY, _maxZ);
+            return true;
+        }
     }
 }
