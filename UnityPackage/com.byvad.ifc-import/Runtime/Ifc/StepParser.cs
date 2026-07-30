@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -70,6 +72,14 @@ namespace Conversion.Ifc
 
         private sealed class Reader
         {
+            private const string FileSchemaMarker = "FILE_SCHEMA";
+            private const string DataSectionMarker = "DATA;";
+
+            /// <summary>Large models comfortably exceed 65k entities; sizing up front avoids rehashing mid-parse.</summary>
+            private const int InitialEntityCapacity = 1 << 16;
+
+            private const int InitialScratchCapacity = 64;
+
             private readonly byte[] _data;
             private int _pos;
 
@@ -77,7 +87,7 @@ namespace Conversion.Ifc
             private readonly Dictionary<string, string> _names =
                 new Dictionary<string, string>(StringComparer.Ordinal);
 
-            private char[] _scratch = new char[64];
+            private char[] _scratch = new char[InitialScratchCapacity];
 
             public Reader(byte[] data)
             {
@@ -91,25 +101,34 @@ namespace Conversion.Ifc
             {
                 while (_pos < _data.Length)
                 {
-                    byte c = _data[_pos];
-                    if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+                    if (IsWhitespace(_data[_pos]))
                     {
                         _pos++;
                     }
-                    else if (c == '/' && _pos + 1 < _data.Length && _data[_pos + 1] == '*')
+                    else if (IsCommentStart())
                     {
-                        _pos += 2;
-                        while (_pos + 1 < _data.Length && !(_data[_pos] == '*' && _data[_pos + 1] == '/'))
-                        {
-                            _pos++;
-                        }
-                        _pos = Math.Min(_pos + 2, _data.Length);
+                        SkipComment();
                     }
                     else
                     {
                         return;
                     }
                 }
+            }
+
+            private static bool IsWhitespace(byte c) => c == ' ' || c == '\t' || c == '\r' || c == '\n';
+
+            private bool IsCommentStart() =>
+                Current == '/' && _pos + 1 < _data.Length && _data[_pos + 1] == '*';
+
+            private void SkipComment()
+            {
+                _pos += 2;   // '/*'
+                while (_pos + 1 < _data.Length && !(_data[_pos] == '*' && _data[_pos + 1] == '/'))
+                {
+                    _pos++;
+                }
+                _pos = Math.Min(_pos + 2, _data.Length);
             }
 
             private static bool IsNameByte(byte c) =>
@@ -129,19 +148,8 @@ namespace Conversion.Ifc
                     return string.Empty;
                 }
 
-                EnsureScratch(length);
-                for (int i = 0; i < length; i++)
-                {
-                    _scratch[i] = (char)_data[start + i];
-                }
-                var candidate = new string(_scratch, 0, length);
-
-                if (_names.TryGetValue(candidate, out string interned))
-                {
-                    return interned;
-                }
-                _names[candidate] = candidate;
-                return candidate;
+                CopyToScratch(start, length);
+                return Intern(new string(_scratch, 0, length));
             }
 
             private void EnsureScratch(int length)
@@ -152,10 +160,30 @@ namespace Conversion.Ifc
                 }
             }
 
+            private void CopyToScratch(int start, int length)
+            {
+                EnsureScratch(length);
+                for (int i = 0; i < length; i++)
+                {
+                    _scratch[i] = (char)_data[start + i];
+                }
+            }
+
+            /// <summary>Return the shared instance for a repeated name/literal, registering it on first sight.</summary>
+            private string Intern(string candidate)
+            {
+                if (_names.TryGetValue(candidate, out string interned))
+                {
+                    return interned;
+                }
+                _names[candidate] = candidate;
+                return candidate;
+            }
+
             /// <summary>Pull the schema out of FILE_SCHEMA(('IFC2X3')); in the header.</summary>
             public string ReadSchemaName()
             {
-                int marker = IndexOfAscii("FILE_SCHEMA", 0);
+                int marker = IndexOfAscii(FileSchemaMarker, 0);
                 if (marker < 0)
                 {
                     throw new InvalidDataException("Not a STEP physical file: no FILE_SCHEMA in the header.");
@@ -175,8 +203,7 @@ namespace Conversion.Ifc
                 }
 
                 // IFC4X3_ADD2 and friends carry a suffix the table is not named for.
-                string name = builder.ToString().Trim().ToUpperInvariant();
-                return name;
+                return builder.ToString().Trim().ToUpperInvariant();
             }
 
             private int IndexOfAscii(string needle, int from)
@@ -203,86 +230,106 @@ namespace Conversion.Ifc
 
             public IfcModel ReadData(IfcSchema schema, string schemaName)
             {
-                int dataStart = IndexOfAscii("DATA;", 0);
+                SeekToDataSection();
+
+                var ids = new List<int>();
+                var types = new List<string>();
+                var attributes = new List<IfcValue[]>();
+
+                while (TryReadRecord(schema, out int id, out string type, out IfcValue[] recordAttributes))
+                {
+                    ids.Add(id);
+                    types.Add(type);
+                    attributes.Add(recordAttributes);
+                }
+
+                return BuildModel(schema, schemaName, ids, types, attributes);
+            }
+
+            private void SeekToDataSection()
+            {
+                int dataStart = IndexOfAscii(DataSectionMarker, 0);
                 if (dataStart < 0)
                 {
                     throw new InvalidDataException("No DATA section in the file.");
                 }
-                _pos = dataStart + "DATA;".Length;
+                _pos = dataStart + DataSectionMarker.Length;
+            }
 
-                var byId = new Dictionary<int, IfcEntity>(1 << 16);
-                var byExactType = new Dictionary<string, List<IfcEntity>>(StringComparer.OrdinalIgnoreCase);
+            /// <summary>
+            /// Read one <c>#id=TYPE(...);</c> record. Returns false at the end of the
+            /// section (ENDSEC; or anything else that isn't a record) and also on a
+            /// malformed record — a missing '=' means the parse has gone off the rails,
+            /// and stopping is safer than guessing at recovery.
+            /// </summary>
+            private bool TryReadRecord(IfcSchema schema, out int id, out string type, out IfcValue[] attributes)
+            {
+                id = 0;
+                type = null;
+                attributes = null;
 
-                IfcModel model = null;
-                var pendingIds = new List<int>();
-                var pendingTypes = new List<string>();
-                var pendingAttributes = new List<IfcValue[]>();
-
-                while (true)
+                SkipTrivia();
+                if (AtEnd || Current != '#')
                 {
-                    SkipTrivia();
-                    if (AtEnd)
-                    {
-                        break;
-                    }
-
-                    if (Current != '#')
-                    {
-                        // ENDSEC; or anything else that is not a record ends the section.
-                        break;
-                    }
-
-                    _pos++;                       // '#'
-                    int id = ReadInteger();
-                    SkipTrivia();
-                    if (AtEnd || Current != '=')
-                    {
-                        break;
-                    }
-                    _pos++;                       // '='
-                    SkipTrivia();
-
-                    string type;
-                    IfcValue[] attributes;
-
-                    if (!AtEnd && Current == '(')
-                    {
-                        (type, attributes) = ReadComplexInstance(schema);
-                    }
-                    else
-                    {
-                        type = schema.Canonical(ReadName());
-                        SkipTrivia();
-                        attributes = ReadArgumentList();
-                    }
-
-                    SkipTrivia();
-                    if (!AtEnd && Current == ';')
-                    {
-                        _pos++;
-                    }
-
-                    pendingIds.Add(id);
-                    pendingTypes.Add(type);
-                    pendingAttributes.Add(attributes);
+                    return false;
                 }
 
-                model = new IfcModel(schema, schemaName, byId, byExactType);
-
-                for (int i = 0; i < pendingIds.Count; i++)
+                _pos++;                       // '#'
+                id = ReadInteger();
+                SkipTrivia();
+                if (AtEnd || Current != '=')
                 {
-                    var entity = new IfcEntity(model, pendingIds[i], pendingTypes[i], pendingAttributes[i]);
-                    byId[pendingIds[i]] = entity;
+                    return false;
+                }
+                _pos++;                       // '='
+                SkipTrivia();
 
-                    if (!byExactType.TryGetValue(pendingTypes[i], out List<IfcEntity> bucket))
-                    {
-                        bucket = new List<IfcEntity>();
-                        byExactType[pendingTypes[i]] = bucket;
-                    }
-                    bucket.Add(entity);
+                if (!AtEnd && Current == '(')
+                {
+                    (type, attributes) = ReadComplexInstance(schema);
+                }
+                else
+                {
+                    type = schema.Canonical(ReadName());
+                    SkipTrivia();
+                    attributes = ReadArgumentList();
+                }
+
+                SkipTrivia();
+                if (!AtEnd && Current == ';')
+                {
+                    _pos++;
+                }
+
+                return true;
+            }
+
+            private static IfcModel BuildModel(IfcSchema schema, string schemaName,
+                List<int> ids, List<string> types, List<IfcValue[]> attributes)
+            {
+                var byId = new Dictionary<int, IfcEntity>(InitialEntityCapacity);
+                var byExactType = new Dictionary<string, List<IfcEntity>>(StringComparer.OrdinalIgnoreCase);
+                var model = new IfcModel(schema, schemaName, byId, byExactType);
+
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    var entity = new IfcEntity(model, ids[i], types[i], attributes[i]);
+                    byId[ids[i]] = entity;
+                    AddToTypeBucket(byExactType, types[i], entity);
                 }
 
                 return model;
+            }
+
+            private static void AddToTypeBucket(
+                Dictionary<string, List<IfcEntity>> byExactType, string type, IfcEntity entity)
+            {
+                if (!byExactType.TryGetValue(type, out List<IfcEntity> bucket))
+                {
+                    bucket = new List<IfcEntity>();
+                    byExactType[type] = bucket;
+                }
+                bucket.Add(entity);
             }
 
             /// <summary>
@@ -422,11 +469,7 @@ namespace Conversion.Ifc
                     _pos++;   // trailing '.'
                 }
 
-                EnsureScratch(length);
-                for (int i = 0; i < length; i++)
-                {
-                    _scratch[i] = (char)_data[start + i];
-                }
+                CopyToScratch(start, length);
                 var literal = new string(_scratch, 0, length);
 
                 if (literal == "T")
@@ -442,12 +485,7 @@ namespace Conversion.Ifc
                     return IfcValue.FromLogical(null);
                 }
 
-                if (_names.TryGetValue(literal, out string interned))
-                {
-                    return IfcValue.FromEnumeration(interned);
-                }
-                _names[literal] = literal;
-                return IfcValue.FromEnumeration(literal);
+                return IfcValue.FromEnumeration(Intern(literal));
             }
 
             private int ReadInteger()
@@ -504,11 +542,7 @@ namespace Conversion.Ifc
                 }
 
                 int length = _pos - start;
-                EnsureScratch(length);
-                for (int i = 0; i < length; i++)
-                {
-                    _scratch[i] = (char)_data[start + i];
-                }
+                CopyToScratch(start, length);
 
                 if (!real)
                 {
