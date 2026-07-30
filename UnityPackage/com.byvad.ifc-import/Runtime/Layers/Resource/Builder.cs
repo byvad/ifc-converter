@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using Conversion.Ifc;
@@ -112,40 +114,42 @@ namespace Conversion.Layers.Resource
                 return first;
             }
 
-            Mesh second;
+            Mesh second = ResolveSecondOperand(secondEntity, first, depth);
+            if (second == null || second.IsEmpty)
+            {
+                return first;
+            }
+
+            return ApplyOperator(item.String("Operator"), first, second);
+        }
+
+        private Mesh ResolveSecondOperand(IfcEntity secondEntity, Mesh first, int depth)
+        {
             try
             {
                 if (secondEntity.IsA("IfcHalfSpaceSolid"))
                 {
                     Bounds(first, out Vec3 min, out Vec3 max);
-                    second = Solid.HalfSpaceSolid(secondEntity, min, max, _stats, PlaneAngleScale);
+                    return Solid.HalfSpaceSolid(secondEntity, min, max, _stats, PlaneAngleScale);
                 }
-                else
-                {
-                    second = BuildItem(secondEntity, false, depth + 1);
-                }
+                return BuildItem(secondEntity, false, depth + 1);
             }
             catch (UnsupportedGeometryException)
             {
-                return first;
+                return null;
             }
+        }
 
-            if (second.IsEmpty)
-            {
-                return first;
-            }
-
-            string op = item.String("Operator") ?? "DIFFERENCE";
-            var cutters = new[] { second };
-
-            switch (op)
+        private static Mesh ApplyOperator(string op, Mesh first, Mesh second)
+        {
+            switch (op ?? "DIFFERENCE")
             {
                 case "UNION":
                     return MeshBoolean.Union(first, second);
                 case "INTERSECTION":
                     return MeshBoolean.Intersect(first, second);
                 default:
-                    return MeshBoolean.Subtract(first, cutters);
+                    return MeshBoolean.Subtract(first, new[] { second });
             }
         }
 
@@ -182,25 +186,9 @@ namespace Conversion.Layers.Resource
 
         internal static void Bounds(Mesh mesh, out Vec3 min, out Vec3 max)
         {
-            double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
-            double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
-            foreach (Vec3 v in mesh.Vertices)
-            {
-                if (v.X < minX) minX = v.X;
-                if (v.Y < minY) minY = v.Y;
-                if (v.Z < minZ) minZ = v.Z;
-                if (v.X > maxX) maxX = v.X;
-                if (v.Y > maxY) maxY = v.Y;
-                if (v.Z > maxZ) maxZ = v.Z;
-            }
-            if (minX > maxX)
-            {
-                min = Vec3.Zero;
-                max = Vec3.Zero;
-                return;
-            }
-            min = new Vec3(minX, minY, minZ);
-            max = new Vec3(maxX, maxY, maxZ);
+            var bounds = BoundsAccumulator.Empty;
+            bounds.Add(mesh.Vertices);
+            bounds.TryGetBounds(out min, out max);
         }
     }
 }
