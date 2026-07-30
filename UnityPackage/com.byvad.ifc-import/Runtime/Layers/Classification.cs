@@ -1,5 +1,8 @@
 // @author: Davy Bellens
 
+using System;
+using System.Collections.Generic;
+
 namespace Conversion.Ifc
 {
     /// <summary>

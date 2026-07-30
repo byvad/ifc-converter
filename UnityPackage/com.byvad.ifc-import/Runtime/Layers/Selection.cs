@@ -1,5 +1,9 @@
 // @author: Davy Bellens
 
+using System;
+using System.Collections.Generic;
+using Conversion.Ifc;
+
 namespace Conversion.Layers
 {
     /// <summary>Products chosen for conversion, grouped by conceptual layer.</summary>
