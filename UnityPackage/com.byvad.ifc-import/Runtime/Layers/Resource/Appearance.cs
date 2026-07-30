@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using Conversion.Ifc;
@@ -203,32 +205,33 @@ namespace Conversion.Layers.Resource
                 {
                     continue;
                 }
-                foreach (IfcEntity representation in definition.Entities("Representations"))
+                Rgba? rgba = FirstStyledRgba(definition);
+                if (rgba.HasValue && !_materialRgba.ContainsKey(material.Id))
                 {
-                    bool found = false;
-                    foreach (IfcEntity item in representation.Entities("Items"))
+                    _materialRgba[material.Id] = rgba.Value;
+                }
+            }
+        }
+
+        /// <summary>The first styled item's colour found across this definition's representations, in document order.</summary>
+        private static Rgba? FirstStyledRgba(IfcEntity definition)
+        {
+            foreach (IfcEntity representation in definition.Entities("Representations"))
+            {
+                foreach (IfcEntity item in representation.Entities("Items"))
+                {
+                    if (!item.IsA("IfcStyledItem"))
                     {
-                        if (!item.IsA("IfcStyledItem"))
-                        {
-                            continue;
-                        }
-                        Rgba? rgba = Appearance.StyledItemRgba(item);
-                        if (rgba.HasValue)
-                        {
-                            if (!_materialRgba.ContainsKey(material.Id))
-                            {
-                                _materialRgba[material.Id] = rgba.Value;
-                            }
-                            found = true;
-                            break;
-                        }
+                        continue;
                     }
-                    if (found)
+                    Rgba? rgba = Appearance.StyledItemRgba(item);
+                    if (rgba.HasValue)
                     {
-                        break;
+                        return rgba;
                     }
                 }
             }
+            return null;
         }
 
         /// <summary>The colour a product inherits from its associated material.</summary>
@@ -239,7 +242,13 @@ namespace Conversion.Layers.Resource
                 return cached;
             }
 
-            Rgba? resolved = null;
+            Rgba? resolved = FindMaterialRgba(product);
+            _productRgba[product.Id] = resolved;
+            return resolved;
+        }
+
+        private Rgba? FindMaterialRgba(IfcEntity product)
+        {
             foreach (IfcEntity association in product.Inverse("HasAssociations"))
             {
                 if (!association.IsA("IfcRelAssociatesMaterial"))
@@ -250,18 +259,11 @@ namespace Conversion.Layers.Resource
                 {
                     if (_materialRgba.TryGetValue(material.Id, out Rgba hit))
                     {
-                        resolved = hit;
-                        break;
+                        return hit;
                     }
                 }
-                if (resolved.HasValue)
-                {
-                    break;
-                }
             }
-
-            _productRgba[product.Id] = resolved;
-            return resolved;
+            return null;
         }
 
         public string Unstyled()
@@ -316,6 +318,7 @@ namespace Conversion.Layers.Resource
             {
                 writer.Write("# materials resolved from " + source + "\n");
                 writer.Write("# IfcSurfaceStyleRendering -> Kd, Transparency -> d\n");
+
                 foreach (string name in names)
                 {
                     Rgba c = _registered[name];
