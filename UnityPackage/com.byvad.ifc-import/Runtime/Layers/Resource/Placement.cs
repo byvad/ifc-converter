@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using Conversion.Ifc;
 
 namespace Conversion.Layers.Resource
@@ -61,31 +63,46 @@ namespace Conversion.Layers.Resource
             }
             else
             {
-                if (!ReadDirection(placement.Entity("Axis"), Vec3.UnitZ).TryNormalize(out zAxis))
-                {
-                    zAxis = Vec3.UnitZ;
-                }
-
-                Vec3 reference = ReadDirection(placement.Entity("RefDirection"), Vec3.UnitX);
-                Vec3 projected = reference - zAxis * Vec3.Dot(reference, zAxis);
-
-                if (projected.LengthSquared < 1e-20)
-                {
-                    // RefDirection was parallel to the axis, or absent. Pick any
-                    // perpendicular rather than dividing by zero.
-                    Vec3 candidate = System.Math.Abs(zAxis.X) < 0.9 ? Vec3.UnitX : Vec3.UnitY;
-                    projected = candidate - zAxis * Vec3.Dot(candidate, zAxis);
-                }
-
-                if (!projected.TryNormalize(out xAxis))
-                {
-                    xAxis = Vec3.UnitX;
-                }
+                (xAxis, zAxis) = OrthonormalBasis(
+                    ReadDirection(placement.Entity("Axis"), Vec3.UnitZ),
+                    ReadDirection(placement.Entity("RefDirection"), Vec3.UnitX));
                 yAxis = Vec3.Cross(zAxis, xAxis);
             }
 
             return Matrix4.FromBasis(xAxis, yAxis, zAxis, origin);
         }
+
+        /// <summary>
+        /// Build an orthonormal (xAxis, zAxis) pair from an approximate primary
+        /// direction and a reference direction, Gram-Schmidt style. If the
+        /// reference is parallel to the primary axis (or absent), falls back to
+        /// any perpendicular rather than dividing by zero.
+        /// </summary>
+        private static (Vec3 XAxis, Vec3 ZAxis) OrthonormalBasis(Vec3 rawPrimary, Vec3 rawReference)
+        {
+            if (!rawPrimary.TryNormalize(out Vec3 zAxis))
+            {
+                zAxis = Vec3.UnitZ;
+            }
+
+            Vec3 projected = rawReference - zAxis * Vec3.Dot(rawReference, zAxis);
+            if (projected.LengthSquared < 1e-20)
+            {
+                // The reference was parallel to the axis, or absent. Pick any
+                // perpendicular rather than dividing by zero.
+                Vec3 candidate = System.Math.Abs(zAxis.X) < 0.9 ? Vec3.UnitX : Vec3.UnitY;
+                projected = candidate - zAxis * Vec3.Dot(candidate, zAxis);
+            }
+
+            if (!projected.TryNormalize(out Vec3 xAxis))
+            {
+                xAxis = Vec3.UnitX;
+            }
+            return (xAxis, zAxis);
+        }
+
+        /// <summary>Guards against a cyclic PlacementRelTo, not a limit any real chain should reach.</summary>
+        private const int MaxPlacementChainLength = 256;
 
         /// <summary>
         /// Walk an IfcLocalPlacement chain up to the world.
@@ -107,7 +124,7 @@ namespace Conversion.Layers.Resource
                  step = step.Entity("PlacementRelTo"))
             {
                 chain.Add(step);
-                if (chain.Count > 256)
+                if (chain.Count > MaxPlacementChainLength)
                 {
                     break;   // cyclic PlacementRelTo; malformed, but do not hang
                 }
@@ -146,22 +163,9 @@ namespace Conversion.Layers.Resource
             double scale2 = nonUniform && !op["Scale2"].IsNull ? op.Double("Scale2", scale1) : scale1;
             double scale3 = nonUniform && !op["Scale3"].IsNull ? op.Double("Scale3", scale1) : scale1;
 
-            if (!ReadDirection(op.Entity("Axis3"), Vec3.UnitZ).TryNormalize(out Vec3 zAxis))
-            {
-                zAxis = Vec3.UnitZ;
-            }
-
-            Vec3 reference = ReadDirection(op.Entity("Axis1"), Vec3.UnitX);
-            Vec3 projected = reference - zAxis * Vec3.Dot(reference, zAxis);
-            if (projected.LengthSquared < 1e-20)
-            {
-                Vec3 candidate = System.Math.Abs(zAxis.X) < 0.9 ? Vec3.UnitX : Vec3.UnitY;
-                projected = candidate - zAxis * Vec3.Dot(candidate, zAxis);
-            }
-            if (!projected.TryNormalize(out Vec3 xAxis))
-            {
-                xAxis = Vec3.UnitX;
-            }
+            (Vec3 xAxis, Vec3 zAxis) = OrthonormalBasis(
+                ReadDirection(op.Entity("Axis3"), Vec3.UnitZ),
+                ReadDirection(op.Entity("Axis1"), Vec3.UnitX));
 
             Vec3 yAxis = Vec3.Cross(zAxis, xAxis);
 
