@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -81,15 +83,34 @@ namespace Conversion.Unity
             var prepared = new PreparedImport();
             var watch = Stopwatch.StartNew();
 
+            ParseFile(prepared, path, schemaCache, progress);
+            prepared.ParseMilliseconds = watch.ElapsedMilliseconds;
+            watch.Restart();
+
+            // UnitScale deliberately falls on this side of the restart: it needs the
+            // parsed model, and it's cheap enough that it belongs in the mesh-timing
+            // bucket rather than earning the parse step its own asterisk.
+            prepared.UnitScale = Units.LengthScale(prepared.Model);
+            ProductSelection selection = SelectProducts(prepared, options, taxonomyDocuments);
+            prepared.Roots = Spatial.Build(prepared.Model);
+            BuildMeshes(prepared, selection, options, progress);
+
+            prepared.MeshMilliseconds = watch.ElapsedMilliseconds;
+            return prepared;
+        }
+
+        private static void ParseFile(PreparedImport prepared, string path,
+            IReadOnlyDictionary<string, string> schemaCache, PipelineProgress progress)
+        {
             progress?.Set("Reading file", 0, 1);
             var registry = new IfcSchemaRegistry(name =>
                 schemaCache.TryGetValue(name, out string text) ? text : null);
             prepared.Model = StepParser.Load(path, registry);
-            prepared.ParseMilliseconds = watch.ElapsedMilliseconds;
+        }
 
-            watch.Restart();
-            prepared.UnitScale = Units.LengthScale(prepared.Model);
-
+        private static ProductSelection SelectProducts(
+            PreparedImport prepared, IfcLoadOptions options, IReadOnlyList<string> taxonomyDocuments)
+        {
             Classification classification = Classification.FromJson(taxonomyDocuments);
             ProductSelection selection = new Selection(classification)
                 .Select(prepared.Model, options.Layers, options.Schemas, options.Classes);
@@ -102,9 +123,12 @@ namespace Conversion.Unity
                 prepared.Layers[product.Id] = layer;
             }
             prepared.Products = selection.Count;
+            return selection;
+        }
 
-            prepared.Roots = Spatial.Build(prepared.Model);
-
+        private static void BuildMeshes(
+            PreparedImport prepared, ProductSelection selection, IfcLoadOptions options, PipelineProgress progress)
+        {
             Palette palette = options.Colour ? new Palette(prepared.Model, options.MinAlpha) : null;
             var builder = new Builder { PlaneAngleScale = Units.PlaneAngleScale(prepared.Model) };
             var resolver = new ProductResolver(builder, palette);
@@ -131,9 +155,6 @@ namespace Conversion.Unity
                 prepared.Meshes[product.Id] = data;
                 prepared.Triangles += data.TriangleCount;
             }
-
-            prepared.MeshMilliseconds = watch.ElapsedMilliseconds;
-            return prepared;
         }
 
         /// <summary>
@@ -157,6 +178,8 @@ namespace Conversion.Unity
             return root;
         }
 
+        private static readonly string[] SupportedSchemas = { "IFC2X3", "IFC4" };
+
         /// <summary>
         /// Pull the schema tables and taxonomy documents across to plain strings.
         /// <see cref="Resources.Load"/> is main-thread only, so this has to happen
@@ -172,7 +195,7 @@ namespace Conversion.Unity
 
             taxonomyDocuments = new List<string>(taxonomy());
             schemaCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string name in new[] { "IFC2X3", "IFC4" })
+            foreach (string name in SupportedSchemas)
             {
                 string text = schemaText(name);
                 if (text != null)
