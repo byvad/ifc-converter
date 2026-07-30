@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -63,8 +65,8 @@ namespace Conversion.Unity
             {
                 if (_fallback == null)
                 {
-                    _fallback = Get(new Rgba(0.78, 0.78, 0.78, 1.0));
-                    _fallback.name = "ifc_unstyled";
+                    _fallback = Get(Appearance.UnstyledColour);
+                    _fallback.name = Appearance.UnstyledName;
                 }
                 return _fallback;
             }
@@ -88,41 +90,49 @@ namespace Conversion.Unity
             return material;
         }
 
+        /// <summary>Alpha at or above this reads as fully opaque — below it, the material goes transparent.</summary>
+        private const float OpaqueAlphaThreshold = 0.999f;
+
         private Material Create(Rgba colour)
         {
-            float alpha = (float)colour.A;
-            if (alpha < MinimumAlpha)
-            {
-                alpha = MinimumAlpha;
-            }
+            float alpha = ClampedAlpha(colour.A);
 
             var material = new Material(_shader)
             {
-                name = string.Format("ifc_{0:X2}{1:X2}{2:X2}{3:X2}",
-                    Mathf.RoundToInt((float)colour.R * 255f),
-                    Mathf.RoundToInt((float)colour.G * 255f),
-                    Mathf.RoundToInt((float)colour.B * 255f),
-                    Mathf.RoundToInt(alpha * 255f)),
+                name = MaterialName(colour, alpha),
                 enableInstancing = true,
             };
 
             material.SetColor(BaseColor,
                 new Color((float)colour.R, (float)colour.G, (float)colour.B, alpha));
             material.SetFloat(Metallic, 0f);
-            material.SetFloat(Smoothness, alpha < 0.999f ? 0.85f : 0.25f);
+            material.SetFloat(Smoothness, alpha < OpaqueAlphaThreshold ? 0.85f : 0.25f);
 
             if (DoubleSided)
             {
                 material.SetFloat(Cull, (float)CullMode.Off);
             }
 
-            if (alpha < 0.999f)
+            if (alpha < OpaqueAlphaThreshold)
             {
                 MakeTransparent(material);
             }
 
             return material;
         }
+
+        private float ClampedAlpha(double rawAlpha)
+        {
+            float alpha = (float)rawAlpha;
+            return alpha < MinimumAlpha ? MinimumAlpha : alpha;
+        }
+
+        private static string MaterialName(Rgba colour, float alpha) =>
+            string.Format("ifc_{0:X2}{1:X2}{2:X2}{3:X2}",
+                Mathf.RoundToInt((float)colour.R * 255f),
+                Mathf.RoundToInt((float)colour.G * 255f),
+                Mathf.RoundToInt((float)colour.B * 255f),
+                Mathf.RoundToInt(alpha * 255f));
 
         /// <summary>
         /// Switch a URP Lit material to transparent.
