@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,6 +40,11 @@ namespace Conversion.Ifc
     /// </summary>
     public sealed class IfcSchema
     {
+        private const string SchemaNameRecord = "S";
+        private const string EntityRecord = "E";
+        private const string InverseRecord = "V";
+        private const string NoSupertype = "-";
+
         private sealed class EntityDefinition
         {
             public string Name;
@@ -71,48 +78,9 @@ namespace Conversion.Ifc
             foreach (string rawLine in text.Split('\n'))
             {
                 string line = rawLine.Trim();
-                if (line.Length == 0)
+                if (line.Length > 0)
                 {
-                    continue;
-                }
-
-                string[] fields = line.Split('|');
-                switch (fields[0])
-                {
-                    case "S":
-                        schema.Name = fields[1];
-                        break;
-
-                    case "E":
-                    {
-                        var definition = new EntityDefinition
-                        {
-                            Name = fields[1],
-                            SupertypeName = fields[2] == "-" ? null : fields[2],
-                            OwnAttributes = fields[3].Length == 0
-                                ? Array.Empty<string>()
-                                : fields[3].Split(','),
-                        };
-                        schema._entities[definition.Name] = definition;
-
-                        if (definition.SupertypeName != null)
-                        {
-                            if (!schema._children.TryGetValue(definition.SupertypeName, out List<string> siblings))
-                            {
-                                siblings = new List<string>();
-                                schema._children[definition.SupertypeName] = siblings;
-                            }
-                            siblings.Add(definition.Name);
-                        }
-                        break;
-                    }
-
-                    case "V":
-                        if (schema._entities.TryGetValue(fields[1], out EntityDefinition owner))
-                        {
-                            owner.OwnInverses.Add((fields[2], new InverseLink(fields[3], fields[4])));
-                        }
-                        break;
+                    schema.ParseLine(line);
                 }
             }
 
@@ -120,6 +88,57 @@ namespace Conversion.Ifc
         }
 
         public static IfcSchema Load(string path) => Parse(File.ReadAllText(path));
+
+        private void ParseLine(string line)
+        {
+            string[] fields = line.Split('|');
+            switch (fields[0])
+            {
+                case SchemaNameRecord:
+                    Name = fields[1];
+                    break;
+                case EntityRecord:
+                    AddEntity(fields);
+                    break;
+                case InverseRecord:
+                    AddInverse(fields);
+                    break;
+            }
+        }
+
+        private void AddEntity(string[] fields)
+        {
+            var definition = new EntityDefinition
+            {
+                Name = fields[1],
+                SupertypeName = fields[2] == NoSupertype ? null : fields[2],
+                OwnAttributes = fields[3].Length == 0 ? Array.Empty<string>() : fields[3].Split(','),
+            };
+            _entities[definition.Name] = definition;
+
+            if (definition.SupertypeName != null)
+            {
+                RegisterChild(definition.SupertypeName, definition.Name);
+            }
+        }
+
+        private void RegisterChild(string supertypeName, string childName)
+        {
+            if (!_children.TryGetValue(supertypeName, out List<string> siblings))
+            {
+                siblings = new List<string>();
+                _children[supertypeName] = siblings;
+            }
+            siblings.Add(childName);
+        }
+
+        private void AddInverse(string[] fields)
+        {
+            if (_entities.TryGetValue(fields[1], out EntityDefinition owner))
+            {
+                owner.OwnInverses.Add((fields[2], new InverseLink(fields[3], fields[4])));
+            }
+        }
 
         public bool IsKnown(string type) => _entities.ContainsKey(type);
 
@@ -138,21 +157,18 @@ namespace Conversion.Ifc
             return definition;
         }
 
-        private static void Resolve(IfcSchema schema, EntityDefinition definition)
+        /// <summary>The definition's declared supertype, or null once the chain reaches the root.</summary>
+        private EntityDefinition Supertype(EntityDefinition definition) =>
+            definition.SupertypeName == null ? null : Definition(definition.SupertypeName);
+
+        private void Resolve(EntityDefinition definition)
         {
             if (definition.AllAttributes != null)
             {
                 return;
             }
 
-            var chain = new List<EntityDefinition>();
-            for (EntityDefinition step = definition; step != null;
-                 step = step.SupertypeName == null ? null : schema.Definition(step.SupertypeName))
-            {
-                chain.Add(step);
-            }
-            chain.Reverse();   // root first: attribute order runs down the chain
-
+            List<EntityDefinition> chain = InheritanceChain(definition);
             var attributes = new List<string>();
             var inverses = new Dictionary<string, InverseLink>(StringComparer.OrdinalIgnoreCase);
             var ancestry = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -167,51 +183,67 @@ namespace Conversion.Ifc
                 ancestry.Add(step.Name);
             }
 
+            definition.AllAttributes = attributes.ToArray();
+            definition.AttributeIndex = BuildAttributeIndex(attributes);
+            definition.AllInverses = inverses;
+            definition.Ancestry = ancestry;
+        }
+
+        /// <summary>The definition and its ancestors, root first — attribute order runs down the chain.</summary>
+        private List<EntityDefinition> InheritanceChain(EntityDefinition definition)
+        {
+            var chain = new List<EntityDefinition>();
+            for (EntityDefinition step = definition; step != null; step = Supertype(step))
+            {
+                chain.Add(step);
+            }
+            chain.Reverse();
+            return chain;
+        }
+
+        private static Dictionary<string, int> BuildAttributeIndex(List<string> attributes)
+        {
             var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < attributes.Count; i++)
             {
                 index[attributes[i]] = i;
             }
+            return index;
+        }
 
-            definition.AllAttributes = attributes.ToArray();
-            definition.AttributeIndex = index;
-            definition.AllInverses = inverses;
-            definition.Ancestry = ancestry;
+        /// <summary>Look up a type's definition and lazily resolve its inherited attributes, if found.</summary>
+        private EntityDefinition ResolvedDefinition(string type)
+        {
+            EntityDefinition definition = Definition(type);
+            if (definition != null)
+            {
+                Resolve(definition);
+            }
+            return definition;
         }
 
         /// <summary>Attribute names in STEP order, inherited ones first.</summary>
-        public IReadOnlyList<string> AttributeNames(string type)
-        {
-            EntityDefinition definition = Definition(type);
-            if (definition == null)
-            {
-                return Array.Empty<string>();
-            }
-            Resolve(this, definition);
-            return definition.AllAttributes;
-        }
+        public IReadOnlyList<string> AttributeNames(string type) =>
+            ResolvedDefinition(type)?.AllAttributes ?? Array.Empty<string>();
 
         /// <summary>Positional slot for a named attribute, or -1 if this type has no such attribute.</summary>
         public int AttributeIndex(string type, string attribute)
         {
-            EntityDefinition definition = Definition(type);
-            if (definition == null)
-            {
-                return -1;
-            }
-            Resolve(this, definition);
-            return definition.AttributeIndex.TryGetValue(attribute, out int index) ? index : -1;
+            EntityDefinition definition = ResolvedDefinition(type);
+            return definition != null && definition.AttributeIndex.TryGetValue(attribute, out int index)
+                ? index
+                : -1;
         }
 
+        /// <summary>Look up the inverse-attribute link for <paramref name="attribute"/> on <paramref name="type"/>, if the schema declares one.</summary>
         public bool TryGetInverse(string type, string attribute, out InverseLink link)
         {
-            EntityDefinition definition = Definition(type);
+            EntityDefinition definition = ResolvedDefinition(type);
             if (definition == null)
             {
                 link = default;
                 return false;
             }
-            Resolve(this, definition);
             return definition.AllInverses.TryGetValue(attribute, out link);
         }
 
@@ -221,13 +253,10 @@ namespace Conversion.Ifc
         /// </summary>
         public bool IsSubtypeOf(string type, string ancestor)
         {
-            EntityDefinition definition = Definition(type);
-            if (definition == null)
-            {
-                return string.Equals(type, ancestor, StringComparison.OrdinalIgnoreCase);
-            }
-            Resolve(this, definition);
-            return definition.Ancestry.Contains(ancestor);
+            EntityDefinition definition = ResolvedDefinition(type);
+            return definition == null
+                ? string.Equals(type, ancestor, StringComparison.OrdinalIgnoreCase)
+                : definition.Ancestry.Contains(ancestor);
         }
 
         /// <summary>Names of the supertypes of <paramref name="type"/>, nearest first.</summary>
@@ -238,10 +267,7 @@ namespace Conversion.Ifc
             {
                 yield break;
             }
-            for (EntityDefinition step = definition.SupertypeName == null
-                     ? null : Definition(definition.SupertypeName);
-                 step != null;
-                 step = step.SupertypeName == null ? null : Definition(step.SupertypeName))
+            for (EntityDefinition step = Supertype(definition); step != null; step = Supertype(step))
             {
                 yield return step.Name;
             }
