@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 
@@ -8,6 +10,9 @@ namespace Conversion.Ifc
     /// </summary>
     public sealed class IfcModel
     {
+        /// <summary>An IFC reference that didn't resolve to an entity, e.g. <c>$</c> in the STEP source.</summary>
+        private const int UnresolvedReferenceId = 0;
+
         public IfcSchema Schema { get; }
 
         /// <summary>The schema named in the file header, e.g. <c>IFC2X3</c>.</summary>
@@ -40,10 +45,13 @@ namespace Conversion.Ifc
             _byExactType = byExactType;
         }
 
+        /// <summary>The total number of entities parsed from the file.</summary>
         public int EntityCount => _byId.Count;
 
+        /// <summary>Look up an entity by its <c>#123</c> line number, or null if there is none.</summary>
         public IfcEntity ById(int id) => _byId.TryGetValue(id, out IfcEntity entity) ? entity : null;
 
+        /// <summary>Resolve a reference-kind value to the entity it points at, or null if it isn't one.</summary>
         public IfcEntity Resolve(IfcValue value)
         {
             IfcValue unwrapped = value.Unwrapped;
@@ -57,18 +65,22 @@ namespace Conversion.Ifc
         /// </summary>
         public List<IfcEntity> ByType(string type, bool includeSubtypes = true)
         {
+            IEnumerable<string> typeNames = includeSubtypes
+                ? Schema.TypeAndDescendants(type)
+                : SingleType(type);
+
+            return CollectByExactTypeNames(typeNames);
+        }
+
+        private static IEnumerable<string> SingleType(string type)
+        {
+            yield return type;
+        }
+
+        private List<IfcEntity> CollectByExactTypeNames(IEnumerable<string> typeNames)
+        {
             var result = new List<IfcEntity>();
-
-            if (!includeSubtypes)
-            {
-                if (_byExactType.TryGetValue(type, out List<IfcEntity> exact))
-                {
-                    result.AddRange(exact);
-                }
-                return result;
-            }
-
-            foreach (string name in Schema.TypeAndDescendants(type))
+            foreach (string name in typeNames)
             {
                 if (_byExactType.TryGetValue(name, out List<IfcEntity> bucket))
                 {
@@ -102,20 +114,6 @@ namespace Conversion.Ifc
         {
             var index = new Dictionary<int, List<IfcEntity>>();
 
-            void Record(int id, IfcEntity source)
-            {
-                if (id == 0)
-                {
-                    return;
-                }
-                if (!index.TryGetValue(id, out List<IfcEntity> bucket))
-                {
-                    bucket = new List<IfcEntity>();
-                    index[id] = bucket;
-                }
-                bucket.Add(source);
-            }
-
             foreach (IfcEntity source in ByType(link.ReferencingType))
             {
                 IfcValue value = source[link.ReferencingAttribute];
@@ -126,24 +124,32 @@ namespace Conversion.Ifc
                 {
                     foreach (IfcValue item in value.AsList())
                     {
-                        IfcValue unwrapped = item.Unwrapped;
-                        if (unwrapped.Kind == IfcValueKind.Reference)
-                        {
-                            Record(unwrapped.ReferenceId, source);
-                        }
+                        RecordReference(index, item, source);
                     }
                 }
                 else
                 {
-                    IfcValue unwrapped = value.Unwrapped;
-                    if (unwrapped.Kind == IfcValueKind.Reference)
-                    {
-                        Record(unwrapped.ReferenceId, source);
-                    }
+                    RecordReference(index, value, source);
                 }
             }
 
             return index;
+        }
+
+        private static void RecordReference(Dictionary<int, List<IfcEntity>> index, IfcValue value, IfcEntity source)
+        {
+            IfcValue unwrapped = value.Unwrapped;
+            if (unwrapped.Kind != IfcValueKind.Reference || unwrapped.ReferenceId == UnresolvedReferenceId)
+            {
+                return;
+            }
+
+            if (!index.TryGetValue(unwrapped.ReferenceId, out List<IfcEntity> bucket))
+            {
+                bucket = new List<IfcEntity>();
+                index[unwrapped.ReferenceId] = bucket;
+            }
+            bucket.Add(source);
         }
     }
 }
