@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System.Collections.Generic;
 using Conversion.Ifc;
 
