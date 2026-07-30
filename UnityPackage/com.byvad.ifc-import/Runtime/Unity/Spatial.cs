@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using Conversion.Ifc;
@@ -84,9 +86,6 @@ namespace Conversion.Layers.Core
     /// </summary>
     public static class Spatial
     {
-        /// <summary>Guard against a malformed file whose decomposition cycles.</summary>
-        private const int MaxDepth = 64;
-
         /// <summary>
         /// Build the tree. Roots are normally a single IfcProject; a file with none
         /// falls back to whatever spatial elements have no parent, so a partial
@@ -97,102 +96,144 @@ namespace Conversion.Layers.Core
         /// thinks about a building, and it makes hiding a wall hide its windows.</param>
         public static List<SpatialNode> Build(IfcModel model, bool includeFillings = true)
         {
-            var placed = new HashSet<int>();
+            var builder = new TreeBuilder(includeFillings);
             var roots = new List<SpatialNode>();
 
+            BuildProjectRoots(model, roots, builder);
+            BuildOrphanRoots(model, roots, builder);
+
+            return roots;
+        }
+
+        private static void BuildProjectRoots(IfcModel model, List<SpatialNode> roots, TreeBuilder builder)
+        {
             foreach (IfcEntity project in model.ByType("IfcProject"))
             {
                 var root = new SpatialNode(project, SpatialRelation.Root);
-                placed.Add(project.Id);
-                Expand(root, placed, includeFillings, 0);
+                builder.Place(project.Id);
+                builder.Expand(root, 0);
                 roots.Add(root);
             }
+        }
 
+        private static void BuildOrphanRoots(IfcModel model, List<SpatialNode> roots, TreeBuilder builder)
+        {
             // Anything the walk never reached: an orphaned storey, or a product
             // sitting outside the spatial structure entirely. Better surfaced at the
             // top level than silently dropped.
             foreach (IfcEntity product in model.ByType("IfcProduct"))
             {
-                if (placed.Contains(product.Id))
+                if (builder.IsPlaced(product.Id) || product.IsA("IfcOpeningElement"))
                 {
-                    continue;
+                    continue;   // already placed, or a void — voids are not scene objects
                 }
-                if (product.IsA("IfcOpeningElement"))
-                {
-                    continue;   // voids are not scene objects
-                }
+
                 var orphan = new SpatialNode(product, SpatialRelation.Root);
-                placed.Add(product.Id);
-                Expand(orphan, placed, includeFillings, 0);
+                builder.Place(product.Id);
+                builder.Expand(orphan, 0);
                 roots.Add(orphan);
             }
-
-            return roots;
         }
 
-        private static void Expand(SpatialNode node, HashSet<int> placed, bool includeFillings, int depth)
+        /// <summary>
+        /// Walks the three relationship types into a tree, holding the
+        /// already-placed set and the filling preference as state instead of
+        /// threading them through every method — <see cref="Expand"/>'s call tree
+        /// only ever needs to pass the two things that actually change per call:
+        /// which node it's expanding, and how deep it is.
+        /// </summary>
+        private sealed class TreeBuilder
         {
-            if (depth > MaxDepth)
+            /// <summary>Guard against a malformed file whose decomposition cycles.</summary>
+            private const int MaxDepth = 64;
+
+            private readonly HashSet<int> _placed = new HashSet<int>();
+            private readonly bool _includeFillings;
+
+            public TreeBuilder(bool includeFillings)
             {
-                return;
+                _includeFillings = includeFillings;
             }
 
-            // IfcRelAggregates: project -> site -> building -> storey, and also
-            // assemblies such as a stair decomposing into its flights.
-            foreach (IfcEntity relationship in node.Entity.Inverse("IsDecomposedBy"))
-            {
-                if (!relationship.IsA("IfcRelAggregates"))
-                {
-                    continue;
-                }
-                foreach (IfcEntity child in relationship.Entities("RelatedObjects"))
-                {
-                    Attach(node, child, SpatialRelation.Aggregated, placed, includeFillings, depth);
-                }
-            }
+            public bool IsPlaced(int id) => _placed.Contains(id);
 
-            // IfcRelContainedInSpatialStructure: the elements standing on a storey.
-            foreach (IfcEntity relationship in node.Entity.Inverse("ContainsElements"))
-            {
-                if (!relationship.IsA("IfcRelContainedInSpatialStructure"))
-                {
-                    continue;
-                }
-                foreach (IfcEntity child in relationship.Entities("RelatedElements"))
-                {
-                    Attach(node, child, SpatialRelation.Contained, placed, includeFillings, depth);
-                }
-            }
+            public void Place(int id) => _placed.Add(id);
 
-            if (!includeFillings)
+            public void Expand(SpatialNode node, int depth)
             {
-                return;
-            }
-
-            // IfcRelVoidsElement then IfcRelFillsElement: the window in this wall.
-            // The filling is normally also contained in the storey, so this only
-            // fires when the containment pass has not already claimed it.
-            foreach (IfcEntity opening in Openings.Of(node.Entity))
-            {
-                foreach (IfcEntity filling in Openings.FillingsOf(opening))
+                if (depth > MaxDepth)
                 {
-                    Attach(node, filling, SpatialRelation.Filling, placed, includeFillings, depth);
+                    return;
+                }
+
+                ExpandAggregates(node, depth);
+                ExpandContained(node, depth);
+
+                if (_includeFillings)
+                {
+                    ExpandFillings(node, depth);
                 }
             }
-        }
 
-        private static void Attach(SpatialNode parent, IfcEntity child, SpatialRelation relation,
-            HashSet<int> placed, bool includeFillings, int depth)
-        {
-            if (child == null || placed.Contains(child.Id))
+            private void ExpandAggregates(SpatialNode node, int depth)
             {
-                return;   // already parented; an element belongs in exactly one place
+                // IfcRelAggregates: project -> site -> building -> storey, and also
+                // assemblies such as a stair decomposing into its flights.
+                foreach (IfcEntity relationship in node.Entity.Inverse("IsDecomposedBy"))
+                {
+                    if (!relationship.IsA("IfcRelAggregates"))
+                    {
+                        continue;
+                    }
+                    foreach (IfcEntity child in relationship.Entities("RelatedObjects"))
+                    {
+                        Attach(node, child, SpatialRelation.Aggregated, depth);
+                    }
+                }
             }
-            placed.Add(child.Id);
 
-            var node = new SpatialNode(child, relation) { Parent = parent };
-            parent.Children.Add(node);
-            Expand(node, placed, includeFillings, depth + 1);
+            private void ExpandContained(SpatialNode node, int depth)
+            {
+                // IfcRelContainedInSpatialStructure: the elements standing on a storey.
+                foreach (IfcEntity relationship in node.Entity.Inverse("ContainsElements"))
+                {
+                    if (!relationship.IsA("IfcRelContainedInSpatialStructure"))
+                    {
+                        continue;
+                    }
+                    foreach (IfcEntity child in relationship.Entities("RelatedElements"))
+                    {
+                        Attach(node, child, SpatialRelation.Contained, depth);
+                    }
+                }
+            }
+
+            private void ExpandFillings(SpatialNode node, int depth)
+            {
+                // IfcRelVoidsElement then IfcRelFillsElement: the window in this wall.
+                // The filling is normally also contained in the storey, so this only
+                // fires when the containment pass has not already claimed it.
+                foreach (IfcEntity opening in Openings.Of(node.Entity))
+                {
+                    foreach (IfcEntity filling in Openings.FillingsOf(opening))
+                    {
+                        Attach(node, filling, SpatialRelation.Filling, depth);
+                    }
+                }
+            }
+
+            private void Attach(SpatialNode parent, IfcEntity child, SpatialRelation relation, int depth)
+            {
+                if (child == null || IsPlaced(child.Id))
+                {
+                    return;   // already parented; an element belongs in exactly one place
+                }
+                Place(child.Id);
+
+                var node = new SpatialNode(child, relation) { Parent = parent };
+                parent.Children.Add(node);
+                Expand(node, depth + 1);
+            }
         }
 
         /// <summary>Every node across every root, depth first.</summary>
