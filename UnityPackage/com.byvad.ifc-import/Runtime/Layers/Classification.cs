@@ -1,5 +1,4 @@
-using System;
-using System.Collections.Generic;
+// @author: Davy Bellens
 
 namespace Conversion.Ifc
 {
@@ -26,7 +25,9 @@ namespace Conversion.Ifc
     public sealed class Classification
     {
         private readonly Dictionary<string, (string Schema, string LayerName)> _entities =
-            new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public int Count => _entities.Count;
 
         /// <summary>
         /// Build from the taxonomy JSON documents — the same four files the Python
@@ -38,65 +39,85 @@ namespace Conversion.Ifc
 
             foreach (string document in documents)
             {
-                if (string.IsNullOrWhiteSpace(document))
+                if (!string.IsNullOrWhiteSpace(document))
                 {
-                    continue;
-                }
-
-                Dictionary<string, object> root = MiniJson.ParseObject(document);
-                if (root == null || !root.TryGetValue("layer", out object layerValue))
-                {
-                    continue;
-                }
-
-                string layerName = layerValue as string;
-                if (layerName == null || !IsKnownLayer(layerName))
-                {
-                    continue;
-                }
-
-                if (!root.TryGetValue("schemas", out object schemasValue) ||
-                    !(schemasValue is Dictionary<string, object> schemas))
-                {
-                    continue;
-                }
-
-                foreach (KeyValuePair<string, object> entry in schemas)
-                {
-                    if (!(entry.Value is List<object> names))
-                    {
-                        continue;
-                    }
-                    foreach (object name in names)
-                    {
-                        if (name is string entity)
-                        {
-                            classification._entities[entity] = (entry.Key, layerName);
-                        }
-                    }
+                    classification.AddDocument(document);
                 }
             }
 
             return classification;
         }
 
-        public int Count => _entities.Count;
-
-        private static bool IsKnownLayer(string layerName) =>
-            layerName == "Domain" || layerName == "InterOperability"
-            || layerName == "Core" || layerName == "Resource";
-
-        private static Layer Build(string layerName, string schema)
+        private void AddDocument(string document)
         {
-            switch (layerName)
+            Dictionary<string, object> root = MiniJson.ParseObject(document);
+            if (!TryGetLayerName(root, out string layerName) || !TryGetSchemas(root, out var schemas))
             {
-                case "Domain": return new DomainLayer(schema);
-                case "InterOperability": return new InteroperabilityLayer(schema);
-                case "Core": return new CoreLayer(schema);
-                case "Resource": return new ResourceLayer(schema);
-                default: return null;
+                return;
+            }
+
+            foreach (KeyValuePair<string, object> entry in schemas)
+            {
+                RegisterEntities(entry.Key, layerName, entry.Value);
             }
         }
+
+        private static bool TryGetLayerName(Dictionary<string, object> root, out string layerName)
+        {
+            layerName = null;
+            if (root == null || !root.TryGetValue("layer", out object layerValue))
+            {
+                return false;
+            }
+            layerName = layerValue as string;
+            return layerName != null && IsKnownLayer(layerName);
+        }
+
+        private static bool TryGetSchemas(Dictionary<string, object> root, out Dictionary<string, object> schemas)
+        {
+            if (root.TryGetValue("schemas", out object schemasValue) &&
+                schemasValue is Dictionary<string, object> found)
+            {
+                schemas = found;
+                return true;
+            }
+            schemas = null;
+            return false;
+        }
+
+        private void RegisterEntities(string schema, string layerName, object namesValue)
+        {
+            if (namesValue is not List<object> names)
+            {
+                return;
+            }
+            foreach (object name in names)
+            {
+                if (name is string entity)
+                {
+                    _entities[entity] = (schema, layerName);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The complete set of valid layer names and how to build each one — the single
+        /// place that lists them, so <see cref="IsKnownLayer"/> and <see cref="Build"/>
+        /// can never disagree about which layers exist.
+        /// </summary>
+        private static readonly Dictionary<string, Func<string, Layer>> LayerFactories =
+            new(StringComparer.Ordinal)
+            {
+                [Taxonomy.DomainName] = schema => new DomainLayer(schema),
+                [Taxonomy.InteroperabilityName] = schema => new InteroperabilityLayer(schema),
+                [Taxonomy.CoreName] = schema => new CoreLayer(schema),
+                [Taxonomy.ResourceName] = schema => new ResourceLayer(schema),
+            };
+
+        private static bool IsKnownLayer(string layerName) => LayerFactories.ContainsKey(layerName);
+
+        private static Layer Build(string layerName, string schema) =>
+            LayerFactories.TryGetValue(layerName, out Func<string, Layer> factory) ? factory(schema) : null;
 
         /// <summary>
         /// The layer for an IFC entity name, or null.
