@@ -99,7 +99,7 @@ namespace Conversion.Layers.Resource
         public Vec2 XY => new Vec2(X, Y);
 
         /// <summary>
-        /// Best-fit plane normal of a (possibly non-planar) ring via Newell's method —
+        /// Best-fit plane normal of a (possibly non-planar) ring via Newell's method â€”
         /// robust on the near-collinear slivers real breps are full of, where a single
         /// three-point cross product is noise. <paramref name="minLengthSquared"/> is
         /// the caller's own tolerance for "too small to trust as a direction."
