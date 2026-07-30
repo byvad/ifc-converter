@@ -1,4 +1,4 @@
-// @author: Davy Bellens
+
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -128,11 +128,7 @@ namespace Conversion.Unity
         }
 
         private static string MaterialName(Rgba colour, float alpha) =>
-            string.Format("ifc_{0:X2}{1:X2}{2:X2}{3:X2}",
-                Mathf.RoundToInt((float)colour.R * 255f),
-                Mathf.RoundToInt((float)colour.G * 255f),
-                Mathf.RoundToInt((float)colour.B * 255f),
-                Mathf.RoundToInt(alpha * 255f));
+            new Rgba(colour.R, colour.G, colour.B, alpha).HexName();
 
         /// <summary>
         /// Switch a URP Lit material to transparent.

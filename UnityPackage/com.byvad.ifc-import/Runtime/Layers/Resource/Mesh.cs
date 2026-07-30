@@ -37,6 +37,20 @@ namespace Conversion.Layers.Resource
         }
 
         public override string ToString() => $"rgba({R:0.###}, {G:0.###}, {B:0.###}, {A:0.###})";
+
+        /// <summary>
+        /// The stable "ifc_RRGGBBAA" name every output path agrees on for this
+        /// colour — Unity materials, the .mtl writer, and the Python original all
+        /// derive the same name from the same channels, so it's diffable across
+        /// all three. Assumes R/G/B/A are already in [0, 1]; each caller is
+        /// responsible for its own clamping policy before calling this.
+        /// </summary>
+        public string HexName() =>
+            string.Format("ifc_{0:X2}{1:X2}{2:X2}{3:X2}",
+                (int)Math.Round(R * 255.0),
+                (int)Math.Round(G * 255.0),
+                (int)Math.Round(B * 255.0),
+                (int)Math.Round(A * 255.0));
     }
 
     public readonly struct Tri

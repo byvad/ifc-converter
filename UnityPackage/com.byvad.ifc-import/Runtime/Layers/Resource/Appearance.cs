@@ -1,5 +1,3 @@
-// @author: Davy Bellens
-
 using System;
 using System.Collections.Generic;
 using Conversion.Ifc;
@@ -289,11 +287,7 @@ namespace Conversion.Layers.Resource
             double Clamp(double c) => Math.Max(0.0, Math.Min(1.0, c));
             var clamped = new Rgba(Clamp(value.R), Clamp(value.G), Clamp(value.B), Clamp(a));
 
-            string name = string.Format("ifc_{0:X2}{1:X2}{2:X2}{3:X2}",
-                (int)Math.Round(clamped.R * 255),
-                (int)Math.Round(clamped.G * 255),
-                (int)Math.Round(clamped.B * 255),
-                (int)Math.Round(clamped.A * 255));
+            string name = clamped.HexName();
 
             if (!_registered.ContainsKey(name))
             {
@@ -318,7 +312,6 @@ namespace Conversion.Layers.Resource
             {
                 writer.Write("# materials resolved from " + source + "\n");
                 writer.Write("# IfcSurfaceStyleRendering -> Kd, Transparency -> d\n");
-
                 foreach (string name in names)
                 {
                     Rgba c = _registered[name];
