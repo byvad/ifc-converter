@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -21,6 +23,7 @@ namespace Conversion.Ifc
     /// </summary>
     public static class MiniJson
     {
+        /// <summary>Parse a single JSON value — an object, array, string, number, bool or null.</summary>
         public static object Parse(string text)
         {
             int index = 0;
@@ -78,6 +81,34 @@ namespace Conversion.Ifc
             index += literal.Length;
         }
 
+        /// <summary>What comes next inside a <c>{...}</c> or <c>[...]</c>, once whitespace is out of the way.</summary>
+        private enum NextToken { Closed, Comma, Element }
+
+        /// <summary>
+        /// Skip whitespace and classify what follows: the container's closing bracket
+        /// (consumed), a comma separating elements (consumed), or the start of an
+        /// element (left in place for the caller to parse).
+        /// </summary>
+        private static NextToken SkipToNextElement(string text, ref int index, char closing, string unterminatedMessage)
+        {
+            SkipWhitespace(text, ref index);
+            if (index >= text.Length)
+            {
+                throw new FormatException(unterminatedMessage);
+            }
+            if (text[index] == closing)
+            {
+                index++;
+                return NextToken.Closed;
+            }
+            if (text[index] == ',')
+            {
+                index++;
+                return NextToken.Comma;
+            }
+            return NextToken.Element;
+        }
+
         private static Dictionary<string, object> ParseMap(string text, ref int index)
         {
             var map = new Dictionary<string, object>(StringComparer.Ordinal);
@@ -85,19 +116,13 @@ namespace Conversion.Ifc
 
             while (true)
             {
-                SkipWhitespace(text, ref index);
-                if (index >= text.Length)
+                NextToken next = SkipToNextElement(text, ref index, '}', "Unterminated JSON object.");
+                if (next == NextToken.Closed)
                 {
-                    throw new FormatException("Unterminated JSON object.");
-                }
-                if (text[index] == '}')
-                {
-                    index++;
                     return map;
                 }
-                if (text[index] == ',')
+                if (next == NextToken.Comma)
                 {
-                    index++;
                     continue;
                 }
 
@@ -119,24 +144,22 @@ namespace Conversion.Ifc
 
             while (true)
             {
-                SkipWhitespace(text, ref index);
-                if (index >= text.Length)
+                NextToken next = SkipToNextElement(text, ref index, ']', "Unterminated JSON array.");
+                if (next == NextToken.Closed)
                 {
-                    throw new FormatException("Unterminated JSON array.");
-                }
-                if (text[index] == ']')
-                {
-                    index++;
                     return items;
                 }
-                if (text[index] == ',')
+                if (next == NextToken.Comma)
                 {
-                    index++;
                     continue;
                 }
+
                 items.Add(ParseValue(text, ref index));
             }
         }
+
+        /// <summary>A <c>\uXXXX</c> escape always spends exactly four hex digits.</summary>
+        private const int UnicodeEscapeDigits = 4;
 
         private static string ParseString(string text, ref int index)
         {
@@ -164,31 +187,40 @@ namespace Conversion.Ifc
                 {
                     break;
                 }
-
-                char escape = text[index++];
-                switch (escape)
-                {
-                    case '"': builder.Append('"'); break;
-                    case '\\': builder.Append('\\'); break;
-                    case '/': builder.Append('/'); break;
-                    case 'b': builder.Append('\b'); break;
-                    case 'f': builder.Append('\f'); break;
-                    case 'n': builder.Append('\n'); break;
-                    case 'r': builder.Append('\r'); break;
-                    case 't': builder.Append('\t'); break;
-                    case 'u':
-                        if (index + 4 <= text.Length &&
-                            ushort.TryParse(text.Substring(index, 4), NumberStyles.HexNumber,
-                                CultureInfo.InvariantCulture, out ushort code))
-                        {
-                            builder.Append((char)code);
-                            index += 4;
-                        }
-                        break;
-                    default: builder.Append(escape); break;
-                }
+                AppendEscape(builder, text, ref index);
             }
             throw new FormatException("Unterminated JSON string.");
+        }
+
+        /// <summary>Decode one escape sequence following a <c>\</c> and append it to <paramref name="builder"/>.</summary>
+        private static void AppendEscape(StringBuilder builder, string text, ref int index)
+        {
+            char escape = text[index++];
+            switch (escape)
+            {
+                case '"': builder.Append('"'); break;
+                case '\\': builder.Append('\\'); break;
+                case '/': builder.Append('/'); break;
+                case 'b': builder.Append('\b'); break;
+                case 'f': builder.Append('\f'); break;
+                case 'n': builder.Append('\n'); break;
+                case 'r': builder.Append('\r'); break;
+                case 't': builder.Append('\t'); break;
+                case 'u': AppendUnicodeEscape(builder, text, ref index); break;
+                default: builder.Append(escape); break;
+            }
+        }
+
+        /// <summary>Decode a <c>\uXXXX</c> escape. A malformed one is silently dropped rather than thrown on.</summary>
+        private static void AppendUnicodeEscape(StringBuilder builder, string text, ref int index)
+        {
+            if (index + UnicodeEscapeDigits <= text.Length &&
+                ushort.TryParse(text.Substring(index, UnicodeEscapeDigits), NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out ushort code))
+            {
+                builder.Append((char)code);
+                index += UnicodeEscapeDigits;
+            }
         }
 
         private static double ParseNumber(string text, ref int index)
