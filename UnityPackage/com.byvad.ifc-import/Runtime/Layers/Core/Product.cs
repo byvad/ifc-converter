@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using Conversion.Ifc;
@@ -80,77 +82,109 @@ namespace Conversion.Layers.Core
         public ProductGeometry Resolve(IfcEntity product, bool includeOpenings = true)
         {
             var result = new ProductGeometry(product);
-            bool styles = _palette != null;
 
             if (!HasShape(product))
             {
                 return result;
             }
 
+            BuildRepresentations(product, result);
+            ApplyPlacement(product, result);
+
+            if (includeOpenings)
+            {
+                CutOpenings(product, result);
+            }
+
+            ApplyMaterial(product, result);
+
+            return result;
+        }
+
+        private void BuildRepresentations(IfcEntity product, ProductGeometry result)
+        {
+            bool styles = _palette != null;
+
             foreach (IfcEntity shape in product.Entity("Representation").Entities("Representations"))
             {
                 string identifier = shape.String("RepresentationIdentifier");
 
-                if (identifier != null &&
-                    (SkippedIdentifiers.Contains(identifier) || !MeshableIdentifiers.Contains(identifier)))
+                if (IsSkippedRepresentation(identifier))
                 {
                     result.SkippedRepresentations.Add(identifier);
                     continue;
                 }
 
-                foreach (IfcEntity item in shape.Entities("Items"))
+                BuildItems(shape, result, styles);
+            }
+        }
+
+        private static bool IsSkippedRepresentation(string identifier) =>
+            identifier != null &&
+            (SkippedIdentifiers.Contains(identifier) || !MeshableIdentifiers.Contains(identifier));
+
+        private void BuildItems(IfcEntity shape, ProductGeometry result, bool styles)
+        {
+            foreach (IfcEntity item in shape.Entities("Items"))
+            {
+                try
                 {
-                    try
-                    {
-                        result.Mesh.Extend(_builder.BuildItem(item, styles));
-                        result.ItemsBuilt++;
-                    }
-                    catch (UnsupportedGeometryException exception)
-                    {
-                        result.Unsupported.Add(exception.Message);
-                    }
-                    catch (Exception exception)
-                    {
-                        // One malformed item should cost its own geometry, not the
-                        // rest of the product's.
-                        result.Unsupported.Add($"{item.IsA()}: {exception.Message}");
-                    }
+                    result.Mesh.Extend(_builder.BuildItem(item, styles));
+                    result.ItemsBuilt++;
+                }
+                catch (UnsupportedGeometryException exception)
+                {
+                    result.Unsupported.Add(exception.Message);
+                }
+                catch (Exception exception)
+                {
+                    // One malformed item should cost its own geometry, not the
+                    // rest of the product's.
+                    result.Unsupported.Add($"{item.IsA()}: {exception.Message}");
                 }
             }
+        }
 
+        private static void ApplyPlacement(IfcEntity product, ProductGeometry result)
+        {
             Matrix4 placement = Placement.LocalPlacementMatrix(product.Entity("ObjectPlacement"));
             result.Mesh = result.Mesh.Transformed(placement);
+        }
 
-            // Openings are subtracted in world space: the void's own placement chain
-            // already runs through the host's, so both sides arrive in the same frame.
-            // This has to happen before the material fill, because the boolean rebuilds
-            // the triangle list and the fill claims whatever is left unstyled.
-            if (includeOpenings)
+        /// <summary>
+        /// Openings are subtracted in world space: the void's own placement chain
+        /// already runs through the host's, so both sides arrive in the same frame.
+        /// This has to happen before the material fill, because the boolean rebuilds
+        /// the triangle list and the fill claims whatever is left unstyled.
+        /// </summary>
+        private void CutOpenings(IfcEntity product, ProductGeometry result)
+        {
+            var cutters = new List<Mesh>();
+            foreach (IfcEntity opening in Openings.Of(product))
             {
-                var cutters = new List<Mesh>();
-                foreach (IfcEntity opening in Openings.Of(product))
+                ProductGeometry voidGeometry = Resolve(opening, includeOpenings: false);
+                if (voidGeometry.HasGeometry)
                 {
-                    ProductGeometry voidGeometry = Resolve(opening, includeOpenings: false);
-                    if (voidGeometry.HasGeometry)
-                    {
-                        cutters.Add(voidGeometry.Mesh);
-                    }
-                }
-                if (cutters.Count > 0)
-                {
-                    result.Mesh = MeshBoolean.Subtract(result.Mesh, cutters);
-                    result.OpeningsCut = cutters.Count;
+                    cutters.Add(voidGeometry.Mesh);
                 }
             }
-
-            if (_palette != null)
+            if (cutters.Count == 0)
             {
-                result.StyledBeforeMaterial = result.Mesh.Groups.Count;
-                result.Mesh.FillStyle(_palette.ProductRgba(product));
-                result.StyledByMaterial = result.Mesh.Groups.Count > result.StyledBeforeMaterial;
+                return;
             }
+            result.Mesh = MeshBoolean.Subtract(result.Mesh, cutters);
+            result.OpeningsCut = cutters.Count;
+        }
 
-            return result;
+        private void ApplyMaterial(IfcEntity product, ProductGeometry result)
+        {
+            if (_palette == null)
+            {
+                return;
+            }
+            result.StyledBeforeMaterial = result.Mesh.Groups.Count;
+            result.Mesh.FillStyle(_palette.ProductRgba(product));
+            result.StyledByMaterial = result.Mesh.Groups.Count > result.StyledBeforeMaterial;
         }
     }
 }
