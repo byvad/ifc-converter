@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System.Collections.Generic;
 using Conversion.Ifc;
 
@@ -44,11 +46,7 @@ namespace Conversion.Layers.Core
                 }
                 foreach (IfcEntity unit in assignment.Entities("Units"))
                 {
-                    if (unit.String("UnitType") != unitType)
-                    {
-                        continue;
-                    }
-                    double? scale = NamedUnitScale(unit);
+                    double? scale = MatchingScale(unit, unitType);
                     if (scale.HasValue)
                     {
                         return scale.Value;
@@ -58,43 +56,62 @@ namespace Conversion.Layers.Core
             return fallback;
         }
 
+        /// <summary>This unit's scale, if it declares the unit type being searched for.</summary>
+        private static double? MatchingScale(IfcEntity unit, string unitType) =>
+            unit.String("UnitType") == unitType ? NamedUnitScale(unit) : null;
+
+        /// <summary>How deep IfcConversionBasedUnit chains are allowed to nest before giving up.</summary>
+        private const int MaxConversionDepth = 8;
+
         /// <summary>The size of one of this unit in the SI base unit, or null if it is not one.</summary>
         private static double? NamedUnitScale(IfcEntity unit, int depth = 0)
         {
-            if (unit == null || depth > 8)
+            if (unit == null || depth > MaxConversionDepth)
+            {
+                return null;
+            }
+            if (unit.IsA("IfcSIUnit"))
+            {
+                return SiUnitScale(unit);
+            }
+            if (unit.IsA("IfcConversionBasedUnit"))
+            {
+                return ConversionBasedUnitScale(unit, depth);
+            }
+            return null;
+        }
+
+        private static double SiUnitScale(IfcEntity unit)
+        {
+            string prefix = unit.String("Prefix");
+            if (string.IsNullOrEmpty(prefix))
+            {
+                return 1.0;
+            }
+            return SiPrefixes.TryGetValue(prefix, out double factor) ? factor : 1.0;
+        }
+
+        /// <summary>
+        /// A unit defined relative to another, e.g. a foot as 0.3048 of a metre.
+        /// Recurses through <see cref="NamedUnitScale"/> since the base unit can
+        /// itself be another conversion-based unit.
+        /// </summary>
+        private static double? ConversionBasedUnitScale(IfcEntity unit, int depth)
+        {
+            IfcEntity measure = unit.Entity("ConversionFactor");
+            if (measure == null)
             {
                 return null;
             }
 
-            if (unit.IsA("IfcSIUnit"))
+            // ValueComponent is a select, usually wrapped: IFCRATIOMEASURE(0.3048).
+            if (!measure["ValueComponent"].TryAsDouble(out double value))
             {
-                string prefix = unit.String("Prefix");
-                if (string.IsNullOrEmpty(prefix))
-                {
-                    return 1.0;
-                }
-                return SiPrefixes.TryGetValue(prefix, out double factor) ? factor : 1.0;
+                return null;
             }
 
-            if (unit.IsA("IfcConversionBasedUnit"))
-            {
-                IfcEntity measure = unit.Entity("ConversionFactor");
-                if (measure == null)
-                {
-                    return null;
-                }
-
-                // ValueComponent is a select, usually wrapped: IFCRATIOMEASURE(0.3048).
-                if (!measure["ValueComponent"].TryAsDouble(out double value))
-                {
-                    return null;
-                }
-
-                double? baseScale = NamedUnitScale(measure.Entity("UnitComponent"), depth + 1);
-                return baseScale.HasValue ? value * baseScale.Value : (double?)null;
-            }
-
-            return null;
+            double? baseScale = NamedUnitScale(measure.Entity("UnitComponent"), depth + 1);
+            return baseScale.HasValue ? value * baseScale.Value : (double?)null;
         }
     }
 }
