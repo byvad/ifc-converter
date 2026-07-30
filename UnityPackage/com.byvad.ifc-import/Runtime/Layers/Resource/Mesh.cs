@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 
@@ -132,11 +134,17 @@ namespace Conversion.Layers.Resource
             }
         }
 
+        private List<StyleGroup> OrderedGroups()
+        {
+            var ordered = new List<StyleGroup>(Groups);
+            ordered.Sort((x, y) => x.Start.CompareTo(y.Start));
+            return ordered;
+        }
+
         private List<(int Start, int Stop)> Gaps()
         {
             var gaps = new List<(int, int)>();
-            var ordered = new List<StyleGroup>(Groups);
-            ordered.Sort((x, y) => x.Start.CompareTo(y.Start));
+            List<StyleGroup> ordered = OrderedGroups();
 
             int cursor = 0;
             foreach (StyleGroup group in ordered)
@@ -158,8 +166,7 @@ namespace Conversion.Layers.Resource
         public List<StyleSpan> Spans()
         {
             var spans = new List<StyleSpan>();
-            var ordered = new List<StyleGroup>(Groups);
-            ordered.Sort((x, y) => x.Start.CompareTo(y.Start));
+            List<StyleGroup> ordered = OrderedGroups();
 
             int cursor = 0;
             foreach (StyleGroup group in ordered)
@@ -304,25 +311,15 @@ namespace Conversion.Layers.Resource
         /// </summary>
         public Mesh Recentered(out Vec3 origin)
         {
-            if (Vertices.Count == 0)
+            var bounds = BoundsAccumulator.Empty;
+            bounds.Add(Vertices);
+            if (!bounds.TryGetBounds(out Vec3 min, out Vec3 max))
             {
                 origin = Vec3.Zero;
                 return CloneTopology();
             }
 
-            double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
-            double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
-            foreach (Vec3 v in Vertices)
-            {
-                if (v.X < minX) minX = v.X;
-                if (v.Y < minY) minY = v.Y;
-                if (v.Z < minZ) minZ = v.Z;
-                if (v.X > maxX) maxX = v.X;
-                if (v.Y > maxY) maxY = v.Y;
-                if (v.Z > maxZ) maxZ = v.Z;
-            }
-
-            origin = new Vec3((minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5);
+            origin = new Vec3((min.X + max.X) * 0.5, (min.Y + max.Y) * 0.5, (min.Z + max.Z) * 0.5);
 
             Mesh mesh = CloneTopology();
             foreach (Vec3 v in Vertices)
