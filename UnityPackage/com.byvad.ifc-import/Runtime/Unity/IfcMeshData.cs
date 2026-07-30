@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -34,6 +36,8 @@ namespace Conversion.Unity
         public int TriangleCount;
 
         public bool IsEmpty => Vertices == null || Vertices.Length == 0;
+
+        private static Vector3 ToVector3(Vec3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
 
         /// <summary>
         /// Convert a resolved mesh into Unity's coordinate system and split it for
@@ -74,7 +78,7 @@ namespace Conversion.Unity
             CoreMesh unityMesh = scaled.ToUnity();
             CoreMesh centred = unityMesh.Recentered(out Vec3 origin);
 
-            data.Origin = new Vector3((float)origin.X, (float)origin.Y, (float)origin.Z);
+            data.Origin = ToVector3(origin);
             data.TriangleCount = centred.Triangles.Count;
 
             List<StyleSpan> spans = centred.Spans();
@@ -109,31 +113,12 @@ namespace Conversion.Unity
 
                 for (int t = span.Start; t < span.Stop; t++)
                 {
-                    Tri tri = mesh.Triangles[t];
-                    Vec3 a = mesh.Vertices[tri.A];
-                    Vec3 b = mesh.Vertices[tri.B];
-                    Vec3 c = mesh.Vertices[tri.C];
+                    int start = cursor;
+                    cursor = WriteSplitTriangle(mesh, mesh.Triangles[t], start, vertices, normals);
 
-                    // Face normal from the source doubles, before any precision is lost.
-                    Vec3 normal = Vec3.Cross(b - a, c - a);
-                    if (!normal.TryNormalize(out normal))
-                    {
-                        normal = Vec3.UnitY;   // degenerate triangle; any normal will do
-                    }
-                    var faceNormal = new Vector3((float)normal.X, (float)normal.Y, (float)normal.Z);
-
-                    vertices[cursor] = new Vector3((float)a.X, (float)a.Y, (float)a.Z);
-                    vertices[cursor + 1] = new Vector3((float)b.X, (float)b.Y, (float)b.Z);
-                    vertices[cursor + 2] = new Vector3((float)c.X, (float)c.Y, (float)c.Z);
-                    normals[cursor] = faceNormal;
-                    normals[cursor + 1] = faceNormal;
-                    normals[cursor + 2] = faceNormal;
-
-                    indices[slot] = cursor;
-                    indices[slot + 1] = cursor + 1;
-                    indices[slot + 2] = cursor + 2;
-
-                    cursor += 3;
+                    indices[slot] = start;
+                    indices[slot + 1] = start + 1;
+                    indices[slot + 2] = start + 2;
                     slot += 3;
                 }
 
@@ -147,13 +132,37 @@ namespace Conversion.Unity
             data.SubMeshStyles = styles;
         }
 
+        /// <summary>Write one triangle's own vertices and face normal starting at <paramref name="start"/>. Returns the next free slot.</summary>
+        private static int WriteSplitTriangle(CoreMesh mesh, Tri tri, int start, Vector3[] vertices, Vector3[] normals)
+        {
+            Vec3 a = mesh.Vertices[tri.A];
+            Vec3 b = mesh.Vertices[tri.B];
+            Vec3 c = mesh.Vertices[tri.C];
+
+            // Face normal from the source doubles, before any precision is lost.
+            Vec3 normal = Vec3.Cross(b - a, c - a);
+            if (!normal.TryNormalize(out normal))
+            {
+                normal = Vec3.UnitY;   // degenerate triangle; any normal will do
+            }
+            Vector3 faceNormal = ToVector3(normal);
+
+            vertices[start] = ToVector3(a);
+            vertices[start + 1] = ToVector3(b);
+            vertices[start + 2] = ToVector3(c);
+            normals[start] = faceNormal;
+            normals[start + 1] = faceNormal;
+            normals[start + 2] = faceNormal;
+
+            return start + 3;
+        }
+
         private static void BuildShared(IfcMeshData data, CoreMesh mesh, List<StyleSpan> spans)
         {
             var vertices = new Vector3[mesh.Vertices.Count];
             for (int i = 0; i < mesh.Vertices.Count; i++)
             {
-                Vec3 v = mesh.Vertices[i];
-                vertices[i] = new Vector3((float)v.X, (float)v.Y, (float)v.Z);
+                vertices[i] = ToVector3(mesh.Vertices[i]);
             }
 
             var subMeshes = new int[spans.Count][];
@@ -192,7 +201,7 @@ namespace Conversion.Unity
             // Must be set before the vertices. A castle storey runs well past the
             // 65535 vertices a 16-bit index buffer can address, and the failure mode
             // is a silently truncated mesh rather than an error.
-            if (Vertices.Length > 65535)
+            if (Vertices.Length > ushort.MaxValue)
             {
                 mesh.indexFormat = IndexFormat.UInt32;
             }
