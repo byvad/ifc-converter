@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System.Collections.Generic;
 using UnityEngine;
 using Conversion.Ifc;
@@ -45,20 +47,14 @@ namespace Conversion.Unity
             int sinceYield = 0;
 
             var pending = new Stack<(SpatialNode Node, Transform Parent)>();
-            for (int i = roots.Count - 1; i >= 0; i--)
-            {
-                pending.Push((roots[i], parent));
-            }
+            PushReversed(pending, roots, parent);
 
             while (pending.Count > 0)
             {
                 (SpatialNode node, Transform nodeParent) = pending.Pop();
                 Transform created = CreateNode(node, nodeParent);
 
-                for (int i = node.Children.Count - 1; i >= 0; i--)
-                {
-                    pending.Push((node.Children[i], created));
-                }
+                PushReversed(pending, node.Children, created);
 
                 if (++sinceYield >= objectsPerFrame)
                 {
@@ -70,27 +66,22 @@ namespace Conversion.Unity
             yield return ObjectsCreated;
         }
 
+        /// <summary>Push a sibling list in reverse so the stack still pops it in original order.</summary>
+        private static void PushReversed(
+            Stack<(SpatialNode Node, Transform Parent)> pending, IReadOnlyList<SpatialNode> nodes, Transform parent)
+        {
+            for (int i = nodes.Count - 1; i >= 0; i--)
+            {
+                pending.Push((nodes[i], parent));
+            }
+        }
+
         private Transform CreateNode(SpatialNode node, Transform parent)
         {
             IfcEntity entity = node.Entity;
 
-            string label = node.Name;
-            var go = new GameObject(string.IsNullOrEmpty(label) ? entity.IsA() : label);
-            go.transform.SetParent(parent, worldPositionStays: false);
-            ObjectsCreated++;
-
-            var metadata = go.AddComponent<IfcElement>();
-            metadata.GlobalId = entity.String("GlobalId");
-            metadata.IfcClass = entity.IsA();
-            metadata.IfcName = label;
-            metadata.EntityId = entity.Id;
-            metadata.Relation = node.Relation.ToString();
-
-            if (_layers != null && _layers.TryGetValue(entity.Id, out Layer layer) && layer != null)
-            {
-                metadata.ConceptualLayer = layer.LayerName;
-                metadata.ConceptualSchema = layer.LayerType;
-            }
+            GameObject go = CreateGameObject(entity, node, parent);
+            PopulateMetadata(go, node, entity);
 
             if (_included != null && !_included.Contains(entity.Id))
             {
@@ -102,24 +93,61 @@ namespace Conversion.Unity
                 return go.transform;   // a storey has no geometry of its own
             }
 
-            // The mesh was re-based to its own origin so the vertices stay small;
-            // the offset lives on the Transform, where Unity keeps full precision.
+            AddRenderable(go, parent, data);
+            return go.transform;
+        }
+
+        private GameObject CreateGameObject(IfcEntity entity, SpatialNode node, Transform parent)
+        {
+            string label = node.Name;
+            var go = new GameObject(string.IsNullOrEmpty(label) ? entity.IsA() : label);
+            go.transform.SetParent(parent, worldPositionStays: false);
+            ObjectsCreated++;
+            return go;
+        }
+
+        private void PopulateMetadata(GameObject go, SpatialNode node, IfcEntity entity)
+        {
+            var metadata = go.AddComponent<IfcElement>();
+            metadata.GlobalId = entity.String("GlobalId");
+            metadata.IfcClass = entity.IsA();
+            metadata.IfcName = node.Name;
+            metadata.EntityId = entity.Id;
+            metadata.Relation = node.Relation.ToString();
+
+            if (_layers != null && _layers.TryGetValue(entity.Id, out Layer layer) && layer != null)
+            {
+                metadata.ConceptualLayer = layer.LayerName;
+                metadata.ConceptualSchema = layer.LayerType;
+            }
+        }
+
+        /// <summary>
+        /// The mesh was re-based to its own origin so the vertices stay small;
+        /// the offset lives on the Transform, where Unity keeps full precision.
+        /// </summary>
+        private void AddRenderable(GameObject go, Transform parent, IfcMeshData data)
+        {
             go.transform.localPosition = data.Origin - LocalOriginOf(parent);
 
             UnityEngine.Mesh mesh = data.ToUnityMesh(go.name);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
 
             var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = MaterialsFor(data);
+
+            RenderersCreated++;
+            TrianglesCreated += data.TriangleCount;
+        }
+
+        private Material[] MaterialsFor(IfcMeshData data)
+        {
             var materials = new Material[data.SubMeshes.Length];
             for (int i = 0; i < materials.Length; i++)
             {
                 materials[i] = _materials.Get(data.SubMeshStyles[i]);
             }
-            renderer.sharedMaterials = materials;
-
-            RenderersCreated++;
-            TrianglesCreated += data.TriangleCount;
-            return go.transform;
+            return materials;
         }
 
         /// <summary>
