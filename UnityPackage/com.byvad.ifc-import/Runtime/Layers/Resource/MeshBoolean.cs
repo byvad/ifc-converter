@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 
@@ -71,19 +73,7 @@ namespace Conversion.Layers.Resource
             /// <summary>Newell's method, for the same reason the triangulator uses it.</summary>
             public static bool TryThrough(IReadOnlyList<Vec3> vertices, out Plane plane)
             {
-                double nx = 0.0, ny = 0.0, nz = 0.0;
-                int count = vertices.Count;
-                for (int i = 0; i < count; i++)
-                {
-                    Vec3 current = vertices[i];
-                    Vec3 following = vertices[(i + 1) % count];
-                    nx += (current.Y - following.Y) * (current.Z + following.Z);
-                    ny += (current.Z - following.Z) * (current.X + following.X);
-                    nz += (current.X - following.X) * (current.Y + following.Y);
-                }
-
-                var normal = new Vec3(nx, ny, nz);
-                if (normal.LengthSquared < 1e-30 || !normal.TryNormalize(out normal))
+                if (!Vec3.TryNewellNormal(vertices, 1e-30, out Vec3 normal))
                 {
                     plane = default;
                     return false;
@@ -349,35 +339,18 @@ namespace Conversion.Layers.Resource
 
         private static double EpsilonFor(Mesh mesh, IReadOnlyList<Mesh> cutters)
         {
-            double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
-            double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
-            bool any = false;
-
-            void Absorb(Mesh m)
-            {
-                foreach (Vec3 v in m.Vertices)
-                {
-                    any = true;
-                    if (v.X < minX) minX = v.X;
-                    if (v.Y < minY) minY = v.Y;
-                    if (v.Z < minZ) minZ = v.Z;
-                    if (v.X > maxX) maxX = v.X;
-                    if (v.Y > maxY) maxY = v.Y;
-                    if (v.Z > maxZ) maxZ = v.Z;
-                }
-            }
-
-            Absorb(mesh);
+            var bounds = BoundsAccumulator.Empty;
+            bounds.Add(mesh.Vertices);
             foreach (Mesh cutter in cutters)
             {
-                Absorb(cutter);
+                bounds.Add(cutter.Vertices);
             }
-            if (!any)
+            if (!bounds.TryGetBounds(out Vec3 min, out Vec3 max))
             {
                 return MinimumEpsilon;
             }
 
-            double extent = Math.Max(maxX - minX, Math.Max(maxY - minY, maxZ - minZ));
+            double extent = Math.Max(max.X - min.X, Math.Max(max.Y - min.Y, max.Z - min.Z));
             return Math.Max(MinimumEpsilon, extent * RelativeEpsilon);
         }
 
@@ -410,6 +383,10 @@ namespace Conversion.Layers.Resource
             return polygons;
         }
 
+        /// <summary>Vertices within this many decimal digits weld into one, closing the
+        /// hairline gaps a BSP split leaves along coincident cut edges.</summary>
+        private const int WeldPrecisionDigits = 6;
+
         private static Mesh ToMesh(List<Polygon> polygons)
         {
             // Group by style first so each style occupies one contiguous run of
@@ -440,7 +417,8 @@ namespace Conversion.Layers.Resource
 
             int IndexOf(Vec3 vertex)
             {
-                var key = (Math.Round(vertex.X, 6), Math.Round(vertex.Y, 6), Math.Round(vertex.Z, 6));
+                var key = (Math.Round(vertex.X, WeldPrecisionDigits), Math.Round(vertex.Y, WeldPrecisionDigits),
+                    Math.Round(vertex.Z, WeldPrecisionDigits));
                 if (lookup.TryGetValue(key, out int found))
                 {
                     return found;
@@ -489,6 +467,24 @@ namespace Conversion.Layers.Resource
 
             return mesh;
         }
+
+        /// <summary>How far a result's volume may exceed its theoretical ceiling before
+        /// it's treated as a degeneracy rather than floating-point noise.</summary>
+        private const double VolumeTolerance = 1.001;
+
+        private static bool ExceedsCeiling(double produced, double ceiling) =>
+            ceiling > 0.0 && produced > ceiling * VolumeTolerance;
+
+        /// <summary>
+        /// The specific ways a BSP pass can go wrong on pathological input: a tree
+        /// deep enough to blow the stack, a split storm that exhausts memory, or a
+        /// degenerate polygon that trips an internal invariant.
+        /// </summary>
+        private static bool IsGeometricFailure(Exception exception) =>
+            exception is InsufficientExecutionStackException ||
+            exception is OutOfMemoryException ||
+            exception is InvalidOperationException ||
+            exception is ArgumentException;
 
         /// <summary>Union of two solids. Backs IfcBooleanResult with operator UNION.</summary>
         public static Mesh Union(Mesh a, Mesh b) => Pair(a, b, Operation.Union);
@@ -551,17 +547,13 @@ namespace Conversion.Layers.Resource
                 double ceiling = operation == Operation.Union
                     ? volumeA + volumeB
                     : Math.Min(volumeA, volumeB);
-                if (ceiling > 0.0 && produced > ceiling * 1.001)
+                if (ExceedsCeiling(produced, ceiling))
                 {
                     return a;
                 }
                 return result;
             }
-            catch (Exception exception) when (
-                exception is InsufficientExecutionStackException ||
-                exception is OutOfMemoryException ||
-                exception is InvalidOperationException ||
-                exception is ArgumentException)
+            catch (Exception exception) when (IsGeometricFailure(exception))
             {
                 return a;
             }
@@ -627,17 +619,13 @@ namespace Conversion.Layers.Resource
                 // also the right answer, because a boolean on an open shell is not
                 // defined in the first place.
                 double before = Math.Abs(mesh.SignedVolume());
-                if (before > 0.0 && Math.Abs(result.SignedVolume()) > before * 1.001)
+                if (ExceedsCeiling(Math.Abs(result.SignedVolume()), before))
                 {
                     return mesh;
                 }
                 return result;
             }
-            catch (Exception exception) when (
-                exception is InsufficientExecutionStackException ||
-                exception is OutOfMemoryException ||
-                exception is InvalidOperationException ||
-                exception is ArgumentException)
+            catch (Exception exception) when (IsGeometricFailure(exception))
             {
                 return mesh;
             }
