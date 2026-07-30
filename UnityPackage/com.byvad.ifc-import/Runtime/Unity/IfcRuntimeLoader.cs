@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -43,6 +45,12 @@ namespace Conversion.Unity
 
     public sealed class IfcRuntimeLoader : MonoBehaviour
     {
+        /// <summary>How much of the progress bar the background prepare phase owns;
+        /// the rest goes to building the scene. The two are defined from each other
+        /// so they can't drift apart and leave the bar short of 100%.</summary>
+        private const float PrepareProgressShare = 0.8f;
+        private const float BuildProgressShare = 1f - PrepareProgressShare;
+
         public Coroutine Load(
             string path,
             IfcLoadOptions options = null,
@@ -68,7 +76,7 @@ namespace Conversion.Unity
             while (!work.IsCompleted)
             {
                 progress.Read(out string stage, out float fraction);
-                onProgress?.Invoke(fraction * 0.8f, stage);
+                onProgress?.Invoke(fraction * PrepareProgressShare, stage);
                 yield return null;
             }
 
@@ -89,12 +97,21 @@ namespace Conversion.Unity
 
             foreach (int created in builder.Build(prepared.Roots, root.transform, options.ObjectsPerFrame))
             {
-                onProgress?.Invoke(0.8f + 0.2f * created / Mathf.Max(1, prepared.Roots.Count + prepared.Products),
-                    "Building scene");
+                float builtFraction = BuildProgressShare * created / Mathf.Max(1, prepared.Roots.Count + prepared.Products);
+                onProgress?.Invoke(PrepareProgressShare + builtFraction, "Building scene");
                 yield return null;
             }
             watch.Stop();
 
+            PopulateResult(result, root, builder, materials, prepared, watch.ElapsedMilliseconds);
+
+            onProgress?.Invoke(1f, "Done");
+            onComplete?.Invoke(result);
+        }
+
+        private static void PopulateResult(IfcLoadResult result, GameObject root, IfcSceneBuilder builder,
+            IfcMaterialFactory materials, PreparedImport prepared, long instantiateMilliseconds)
+        {
             result.Root = root;
             result.Nodes = builder.ObjectsCreated;
             result.Renderers = builder.RenderersCreated;
@@ -106,10 +123,7 @@ namespace Conversion.Unity
             result.SchemaName = prepared.Model.SchemaName;
             result.ParseMilliseconds = prepared.ParseMilliseconds;
             result.MeshMilliseconds = prepared.MeshMilliseconds;
-            result.InstantiateMilliseconds = watch.ElapsedMilliseconds;
-
-            onProgress?.Invoke(1f, "Done");
-            onComplete?.Invoke(result);
+            result.InstantiateMilliseconds = instantiateMilliseconds;
         }
     }
 }
