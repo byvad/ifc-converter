@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -42,6 +44,7 @@ namespace Conversion.Ifc
     /// </summary>
     public readonly struct IfcValue
     {
+        /// <summary>The variant this value holds — reference, number, string, and so on.</summary>
         public readonly IfcValueKind Kind;
         private readonly double _number;
         private readonly object _payload;
@@ -59,7 +62,7 @@ namespace Conversion.Ifc
         public static IfcValue FromInteger(long value) => new IfcValue(IfcValueKind.Integer, value, null);
         public static IfcValue FromReal(double value) => new IfcValue(IfcValueKind.Real, value, null);
         public static IfcValue FromLogical(bool? value) =>
-            new IfcValue(IfcValueKind.Logical, value == true ? 1.0 : 0.0, value.HasValue ? (object)value.Value : null);
+            new IfcValue(IfcValueKind.Logical, 0.0, value.HasValue ? (object)value.Value : null);
         public static IfcValue FromString(string value) => new IfcValue(IfcValueKind.String, 0.0, value);
         public static IfcValue FromEnumeration(string value) => new IfcValue(IfcValueKind.Enumeration, 0.0, value);
         public static IfcValue FromReference(int id) => new IfcValue(IfcValueKind.Reference, id, null);
@@ -79,7 +82,10 @@ namespace Conversion.Ifc
             }
         }
 
+        /// <summary>Whether this attribute was absent (<c>$</c>) or derived (<c>*</c>) in the file.</summary>
         public bool IsNull => Kind == IfcValueKind.Null || Kind == IfcValueKind.Derived;
+
+        /// <summary>Whether this is a parenthesised aggregate.</summary>
         public bool IsList => Kind == IfcValueKind.List;
 
         /// <summary>The name of a select wrapper, or null when this is not one.</summary>
@@ -91,8 +97,10 @@ namespace Conversion.Ifc
         /// </summary>
         public IfcValue Unwrapped => _payload is TypedValue typed ? typed.Inner.Unwrapped : this;
 
+        /// <summary>The raw <c>#123</c> line number this reference points at, or 0 when this isn't a reference.</summary>
         internal int ReferenceId => Kind == IfcValueKind.Reference ? (int)_number : 0;
 
+        /// <summary>Read a numeric value, reporting success rather than substituting a default.</summary>
         public bool TryAsDouble(out double result)
         {
             IfcValue value = Unwrapped;
@@ -108,8 +116,10 @@ namespace Conversion.Ifc
             }
         }
 
+        /// <summary>Read a numeric value, or <paramref name="fallback"/> if this isn't one.</summary>
         public double AsDouble(double fallback = 0.0) => TryAsDouble(out double value) ? value : fallback;
 
+        /// <summary>Read a numeric value rounded to the nearest integer, reporting success rather than substituting a default.</summary>
         public bool TryAsInt(out int result)
         {
             if (TryAsDouble(out double value))
@@ -121,6 +131,7 @@ namespace Conversion.Ifc
             return false;
         }
 
+        /// <summary>Read a numeric value rounded to the nearest integer, or <paramref name="fallback"/> if this isn't one.</summary>
         public int AsInt(int fallback = 0) => TryAsInt(out int value) ? value : fallback;
 
         /// <summary>String and enumeration literals both read as text; everything else is null.</summary>
@@ -147,6 +158,7 @@ namespace Conversion.Ifc
             return value._payload as bool?;
         }
 
+        /// <summary>The items of a list-kind value, or empty if this isn't one.</summary>
         public IReadOnlyList<IfcValue> AsList()
         {
             IfcValue value = Unwrapped;
