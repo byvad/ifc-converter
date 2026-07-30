@@ -1,3 +1,5 @@
+// @author: Davy Bellens
+
 using UnityEngine;
 
 namespace Conversion.Unity
