@@ -22,7 +22,7 @@ file above.*
 Via the Unity Package Manager, using a git URL:
 
 ```
-https://github.com/byvad/ifc-converter.git?path=/UnityPackage/com.byvad.ifc-import#v0.4.0
+https://github.com/byvad/ifc-converter.git?path=/UnityPackage/com.byvad.ifc-import#v0.4.1
 ```
 
 **Window > Package Manager > + > Install package from git URL**, paste the
